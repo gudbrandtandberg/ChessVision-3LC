@@ -199,7 +199,7 @@ def main(args):
         )
         .map(train_map)
         .map_collect_metrics(val_map)
-        .revision(None)
+        .revision()
     )
 
     tlc_val_dataset = (
@@ -211,7 +211,7 @@ def main(args):
             project_name=args.project_name,
         )
         .map(val_map)
-        .revision(None)
+        .revision()
     )
 
     print(f"Using training dataset: {tlc_train_dataset.url}")
