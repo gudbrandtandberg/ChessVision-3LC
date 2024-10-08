@@ -43,7 +43,11 @@ def top_k_accuracy(predictions, true_labels, k=3):
 
     for i in range(64):
         for j in range(k):
-            top_k_predictions[i, j] = list(labels.keys())[top_k[i, j]]
+            try:
+                top_k = list(labels.keys())[top_k[i, j]]
+            except IndexError:
+                top_k = "f"
+            top_k_predictions[i, j] = top_k
 
     for square_ind in range(64):
         for j in range(k):
@@ -140,7 +144,7 @@ def run_tests(
     times = []
     test_set_size = len(listdir_nohidden(image_folder))
 
-    with tlc.bulk_data_url_context(run.bulk_data_url):
+    with tlc.bulk_data_url_context(run.bulk_data_url, metrics_writer.url):
         for index, (filename, img) in tqdm(enumerate(data_generator), total=test_set_size, desc="Classifying images"):
             start = time.time()
             board_img, mask, predictions, chessboard, _, squares, _ = classify_raw(
