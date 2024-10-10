@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import tlc
 import torch
 from ultralytics.utils.tlc import TLCYOLO, Settings
@@ -26,7 +28,7 @@ if __name__ == "__main__":
     )
     results = model.train(
         tables={
-            "train": "C:/Users/gudbrand/AppData/Local/3LC/3LC/projects/chessvision-classification/datasets/chesspieces-train/tables/train",
+            "train": "C:/Users/gudbrand/AppData/Local/3LC/3LC/projects/chessvision-classification/datasets/chesspieces-train/tables/train-cleaned",
             "val": "C:/Users/gudbrand/AppData/Local/3LC/3LC/projects/chessvision-classification/datasets/chesspieces-val/tables/val-cleaned-filtered",
         },
         settings=settings,
@@ -34,6 +36,7 @@ if __name__ == "__main__":
         imgsz=64,
         epochs=10,
         workers=4,
+        project=str(Path(__file__).parent.parent),
     )
 
     from chessvision.test import run_tests

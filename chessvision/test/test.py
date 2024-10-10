@@ -44,10 +44,10 @@ def top_k_accuracy(predictions, true_labels, k=3):
     for i in range(64):
         for j in range(k):
             try:
-                top_k = list(labels.keys())[top_k[i, j]]
+                _top_k = list(labels.keys())[top_k[i, j]]
             except IndexError:
-                top_k = "f"
-            top_k_predictions[i, j] = top_k
+                _top_k = "f"
+            top_k_predictions[i, j] = _top_k
 
     for square_ind in range(64):
         for j in range(k):
