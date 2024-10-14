@@ -8,3 +8,6 @@ output/
 .DS_Store
 data/squares/train/
 yolov8**.pt
+data/board_extraction/yolo/
+yolo_output/
+yolo*.pt

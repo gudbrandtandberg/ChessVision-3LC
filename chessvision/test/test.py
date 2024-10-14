@@ -127,6 +127,8 @@ def run_tests(
         "true_labels": tlc.CategoricalLabel("true_labels", LABEL_NAMES),
         "predicted_labels": tlc.CategoricalLabel("predicted_labels", LABEL_NAMES),
         "rendered_board": tlc.Schema(value=tlc.ImageUrlStringValue("rendered_board")),
+        "extracted_board": tlc.Schema(value=tlc.ImageUrlStringValue("extracted_board")),
+        "predicted_masks": tlc.Schema(value=tlc.ImageUrlStringValue("predicted_masks")),
     }
     if not table_writer:
         metrics_schemas = {"raw_img": tlc.PILImage("raw_img"), **metrics_schemas}
@@ -187,6 +189,16 @@ def run_tests(
                 metrics_writer.add_batch(metrics_batch)
                 continue
 
+            # Save the predicted mask
+            predicted_mask_url = Path((run.bulk_data_url / "predicted_masks" / (filename[:-4] + ".png")).to_str())
+            predicted_mask_url.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray(mask.astype(np.uint8)).save(predicted_mask_url)
+
+            # Save the extracted board
+            extracted_board_url = Path((run.bulk_data_url / "extracted_board" / (filename[:-4] + ".png")).to_str())
+            extracted_board_url.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray(board_img).save(extracted_board_url)
+
             if compute_metrics:
                 # Load the true labels
                 truth_file = truth_folder / (filename[:-4] + ".txt")
@@ -217,8 +229,8 @@ def run_tests(
                     "raw_img": [Image.open(str(image_folder / filename))] * 64,
                 }
                 metrics_batch = {
-                    "predicted_masks": [Image.fromarray(mask.astype(np.uint8))] * 64,
-                    "extracted_board": [Image.fromarray(board_img)] * 64,
+                    "predicted_masks": [str(predicted_mask_url)] * 64,
+                    "extracted_board": [str(extracted_board_url)] * 64,
                     "rendered_board": [str(svg_url)] * 64,
                     "accuracy": [top_1] * 64,
                     "square_crop": [Image.fromarray(img.squeeze()) for img in squares],
@@ -244,8 +256,8 @@ def run_tests(
                 }
 
                 metrics_batch = {
-                    "predicted_masks": [Image.fromarray(mask.astype(np.uint8))],
-                    "extracted_board": [Image.fromarray(board_img)],
+                    "predicted_masks": [str(predicted_mask_url)],
+                    "extracted_board": [str(extracted_board_url)],
                     "rendered_board": [str(svg_url)],
                     "example_id": [index],
                     "is_failed": [False],
