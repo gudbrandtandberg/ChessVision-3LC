@@ -146,9 +146,9 @@ def train_model(
             dataset=val_set,
             dataset_name="chessboard-segmentation-val",
             structure=sample_structure,
-        )
-        .map(TransformSampleToModel())
-        .revision(None)
+            if_exists="rename",
+        ).map(TransformSampleToModel())
+        # .revision(None)
     )
 
     tlc_train_dataset = (
@@ -156,9 +156,9 @@ def train_model(
             dataset=train_set,
             dataset_name="chessboard-segmentation-train",
             structure=sample_structure,
-        )
-        .map(TransformSampleToModel())
-        .revision(None)
+            if_exists="rename",
+        ).map(TransformSampleToModel())
+        # .revision(None)
     )
 
     print(f"Using training table {tlc_train_dataset.url}")
