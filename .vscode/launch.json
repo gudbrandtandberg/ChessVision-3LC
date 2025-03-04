@@ -77,6 +77,37 @@
                 "--start_date", "2024-05-17",
                 "--output_folder", "${workspaceFolder}/output"
             ]
+        },
+        {
+            "name": "Run Web Server",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/webroot/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--local", "server"
+            ],
+            "env": {
+                "FLASK_ENV": "development",
+                "FLASK_DEBUG": "1"
+            }
+        },
+        {
+            "name": "Run Compute Endpoint",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/computeroot/cv_endpoint.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--local"
+            ],
+            "env": {
+                "FLASK_ENV": "development",
+                "FLASK_DEBUG": "1",
+                "PYTHONPATH": "${workspaceFolder}"
+            }
         }
     ]
 }

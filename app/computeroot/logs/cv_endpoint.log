@@ -1,0 +1,6 @@
+[2025-03-04 13:52:20,867] 127.0.0.1 requested http://localhost:7777/cv_algo/. INFO in chessvision: CV-Algo invoked
+[2025-03-04 13:52:20,877] 127.0.0.1 requested http://localhost:7777/cv_algo/. INFO in chessvision: Processing image 3097fb39-5b2f-4818-8488-5bc6b0bf8b90.JPG
+[2025-03-04 13:52:20,880] 127.0.0.1 requested http://localhost:7777/cv_algo/. DEBUG in chessvision: Processing image 3097fb39-5b2f-4818-8488-5bc6b0bf8b90.JPG
+[2025-03-04 13:52:20,881] 127.0.0.1 requested http://localhost:7777/cv_algo/. DEBUG in chessvision: Extracting board from image
+[2025-03-04 13:52:21,237] 127.0.0.1 requested http://localhost:7777/cv_algo/. DEBUG in chessvision: Classifying squares
+[2025-03-04 13:52:21,309] 127.0.0.1 requested http://localhost:7777/cv_algo/. DEBUG in chessvision: Processing image 3097fb39-5b2f-4818-8488-5bc6b0bf8b90.JPG.. DONE
