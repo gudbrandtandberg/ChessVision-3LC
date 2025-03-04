@@ -11,3 +11,4 @@ yolov8**.pt
 data/board_extraction/yolo/
 yolo_output/
 yolo*.pt
+app/computeroot/logs/cv_endpoint.log

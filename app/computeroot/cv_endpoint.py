@@ -313,4 +313,4 @@ if __name__ == "__main__":
     port = 7777 if args.local else 8080
     board_model, sq_model = load_models()
 
-    app.run(host="127.0.0.1", port=port)
+    app.run(host="0.0.0.0", port=port)
