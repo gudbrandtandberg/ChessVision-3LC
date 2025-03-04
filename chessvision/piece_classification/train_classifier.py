@@ -15,15 +15,14 @@ import tqdm
 from torch.utils.data import DataLoader
 
 from chessvision.piece_classification.training_utils import EarlyStopping
-from chessvision.utils import DATA_ROOT, classifier_weights_dir, label_names
+from chessvision.utils import DATA_ROOT, get_device, label_names
 
 mp.set_start_method("spawn", force=True)
 
-CHECKPOINT_PATH = Path(classifier_weights_dir) / "checkpoint.pth"
-CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 DATASET_ROOT = f"{DATA_ROOT}/squares"
 tlc.register_url_alias("CHESSPIECES_DATASET_ROOT", DATASET_ROOT)
+tlc.register_url_alias("PROJECT_ROOT", str(tlc.Configuration.instance().project_root_url))
 
 TRAIN_DATASET_PATH = DATASET_ROOT + "/training"
 VAL_DATASET_PATH = DATASET_ROOT + "/validation"
@@ -33,14 +32,14 @@ VAL_DATASET_NAME = "chesspieces-val"
 
 # Hyperparameters
 NUM_CLASSES = 13
+BATCH_SIZE = 32
 INITIAL_LR = 0.001
 LR_SCHEDULER_STEP_SIZE = 4
 LR_SCHEDULER_GAMMA = 0.1
-MAX_EPOCHS = 1
+MAX_EPOCHS = 10
 EARLY_STOPPING_PATIENCE = 4
 HIDDEN_LAYER_INDEX = 90
-MODEL_ID = "resnet18"  # mobilenetv2_100
-
+MODEL_ID = "resnet18"
 
 train_transforms = transforms.Compose(
     [
@@ -124,14 +123,10 @@ def validate(model, val_loader, criterion, device):
     accuracy = 100.0 * correct / total
     return val_loss, accuracy
 
+
 def load_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer | None = None, filename="checkpoint.pth"):
-    if torch.cuda.is_available():
-        map_location = torch.device('cuda')
-    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        map_location = torch.device('mps')
-    else:
-        map_location = torch.device('cpu')
-    checkpoint = torch.load(filename, map_location=map_location)
+    device = get_device()
+    checkpoint = torch.load(filename, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -140,8 +135,7 @@ def load_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer | N
     return model, optimizer, epoch, best_val_loss
 
 
-def save_checkpoint(model, optimizer, epoch, best_val_loss, filename="checkpoint.pth") -> str:
-    filename = filename[:-4] + f"_{epoch}.pth" if epoch > 0 else filename
+def save_checkpoint(model, optimizer, epoch=None, best_val_loss=None, filename="checkpoint.pth") -> str:
     torch.save(
         {
             "epoch": epoch,
@@ -158,7 +152,7 @@ def main(args):
     # Training variables
     start = time.time()
     early_stopping = EarlyStopping(patience=EARLY_STOPPING_PATIENCE, verbose=True)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
     model = get_classifier_model()
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -166,11 +160,11 @@ def main(args):
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=LR_SCHEDULER_STEP_SIZE, gamma=LR_SCHEDULER_GAMMA)
     start_epoch = 0
     best_val_loss = float("inf")
-    last_checkpoint = ""
+    best_val_accuracy = 0.0
 
-    if CHECKPOINT_PATH.exists() and args.resume:
-        model, optimizer, start_epoch, best_val_loss = load_checkpoint(model, optimizer, str(CHECKPOINT_PATH))
-        start_epoch += 1  # Increment to continue from next epoch
+    # if CHECKPOINT_PATH.exists() and args.resume:
+    #     model, optimizer, start_epoch, best_val_loss = load_checkpoint(model, optimizer, str(CHECKPOINT_PATH))
+    #     start_epoch += 1  # Increment to continue from next epoch
 
     # Create a Run object
     run_parameters = {
@@ -180,6 +174,7 @@ def main(args):
         "MAX_EPOCHS": MAX_EPOCHS,
         "EARLY_STOPPING_PATIENCE": EARLY_STOPPING_PATIENCE,
         "MODEL_ID": MODEL_ID,
+        "BATCH_SIZE": BATCH_SIZE,
     }
 
     run = tlc.init(
@@ -189,6 +184,9 @@ def main(args):
         parameters=run_parameters,
         if_exists="reuse" if args.resume else "rename",
     )
+
+    checkpoint_path = run.bulk_data_url / "checkpoint.pth"
+    checkpoint_path.make_parents(True)
 
     # Create datasets
     tlc_train_dataset = (
@@ -201,7 +199,7 @@ def main(args):
         )
         .map(train_map)
         .map_collect_metrics(val_map)
-        .latest()
+        .revision()
     )
 
     tlc_val_dataset = (
@@ -213,18 +211,18 @@ def main(args):
             project_name=args.project_name,
         )
         .map(val_map)
-        .latest()
+        .revision()
     )
 
     print(f"Using training dataset: {tlc_train_dataset.url}")
     print(f"Using validation dataset: {tlc_val_dataset.url}")
 
     # Create data loaders
-    sampler = tlc_train_dataset.create_sampler()
+    sampler = tlc_train_dataset.create_sampler() if args.use_sample_weights else None
     train_data_loader = DataLoader(
         tlc_train_dataset,
-        batch_size=32,
-        shuffle=False,
+        batch_size=BATCH_SIZE,
+        shuffle=False if sampler else True,
         sampler=sampler,
         num_workers=4,
         pin_memory=True,
@@ -232,7 +230,7 @@ def main(args):
     )
     val_data_loader = DataLoader(
         tlc_val_dataset,
-        batch_size=32,
+        batch_size=BATCH_SIZE,
         shuffle=False,
         num_workers=0,
         pin_memory=True,
@@ -280,10 +278,17 @@ def main(args):
             f"Val Acc: {val_acc:.2f}%"
         )
 
-        if val_loss < best_val_loss:
+        if val_acc > best_val_accuracy:
             best_val_loss = val_loss
+            best_val_accuracy = val_acc
             print("Saving model...")
-            last_checkpoint = save_checkpoint(model, optimizer, epoch, best_val_loss, str(CHECKPOINT_PATH))
+            save_checkpoint(
+                model,
+                optimizer,
+                epoch,
+                best_val_loss,
+                str(checkpoint_path),
+            )
 
         early_stopping(val_loss, model)
 
@@ -320,8 +325,17 @@ def main(args):
 
     if args.compute_embeddings:
         print("Reducing embeddings...")
-        run.reduce_embeddings_per_dataset(n_components=2, method="pacmap", delete_source_tables=True)
+        run.reduce_embeddings_by_foreign_table_url(
+            tlc_train_dataset.url, n_components=2, method="pacmap", delete_source_tables=True
+        )
 
+    run.set_parameters(
+        {
+            "best_val_accuracy": best_val_accuracy,
+            "model_path": checkpoint_path.apply_aliases().to_str(),
+            "use_sample_weights": args.use_sample_weights,
+        }
+    )
     if args.run_tests:
         from chessvision.test import run_tests
 
@@ -329,10 +343,11 @@ def main(args):
         del model
         # Reload the model from the best epoch
         model = get_classifier_model()
-        model, _, _, _ = load_checkpoint(model, None, last_checkpoint)
+        model, _, _, _ = load_checkpoint(model, None, checkpoint_path.to_str())
         model.eval()
         model.to(device)
         run_tests(run=run, classifier=model)
+
 
 def get_classifier_model():
     model = timm.create_model(MODEL_ID, num_classes=NUM_CLASSES, in_chans=1)
@@ -342,10 +357,11 @@ def get_classifier_model():
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--project-name", type=str, default="chessvision-classification")
-    argparser.add_argument("--run-name", type=str, default="train-classifier")
-    argparser.add_argument("--description", type=str, default="Train a chess piece classifier")
+    argparser.add_argument("--run-name", type=str, default="")
+    argparser.add_argument("--description", type=str, default="")
     argparser.add_argument("--compute-embeddings", action="store_true")
     argparser.add_argument("--resume", action="store_true")
     argparser.add_argument("--run-tests", action="store_true")
+    argparser.add_argument("--use-sample-weights", action="store_true")
     args = argparser.parse_args()
     main(args)

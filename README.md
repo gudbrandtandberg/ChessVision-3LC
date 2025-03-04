@@ -1,9 +1,20 @@
-# Introduction
+# ChessVision
 
-Contains code for training a Unet model to segment chessboard images and a
-classification model to classify the pieces on the board.
+A computer vision system for detecting and analyzing chess positions from images. The system uses deep learning models to segment chessboards and classify chess pieces.
 
-This is a WIP, feedback welcome.
+## Features
+
+- Chessboard detection and segmentation using a UNet model
+- Chess piece classification using a deep learning model
+- REST API for image processing and position analysis
+- Web interface for uploading and analyzing chess images
+
+## Project Structure
+
+- `chessvision/`: Contains the core computer vision code, including model definitions and training scripts.
+- `app/`: Contains the Flask web application code, including the REST API and web interface. Meant mainly for testing and development.
+- `data/`: Contains the training and evaluation datasets.
+- `weights/`: Contains the pre-trained models.
 
 ## Getting Started
 
@@ -12,6 +23,8 @@ This is a WIP, feedback welcome.
 + Create a virtual environment: `python -m venv .venv`
 + Activate the virtual environment: `source .venv/bin/activate`
 + Install dependencies: `pip install -r requirements.txt`
+
+Try it out using the example notebook `example.ipynb`.
 
 ## Training
 

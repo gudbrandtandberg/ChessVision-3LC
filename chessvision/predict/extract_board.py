@@ -12,19 +12,22 @@ import cv2
 import numpy as np
 import torch
 
-from ..utils import BOARD_SIZE, ratio
+from ..utils import BOARD_SIZE, get_device, ratio
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = get_device()
 
 
-def extract_board(image, orig, model, threshold=80):
+def extract_board(image, orig, model, threshold=0.3):
     image_batch = torch.Tensor(np.array([image])) / 255
     image_batch = image_batch.permute(0, 3, 1, 2).to(device)
 
     with torch.no_grad():
         logits = model(image_batch)
 
-    probabilities = torch.sigmoid(logits)
+    # TODO: when to use sigmoid? when not? I think we need sigmoid for YOLO models..
+    # probabilities = torch.sigmoid(logits)
+    probabilities = logits
+
     probabilities = probabilities[0].squeeze().cpu().numpy()
     mask = fix_mask(probabilities, threshold=threshold)
 
@@ -45,11 +48,10 @@ def extract_board(image, orig, model, threshold=80):
     return board, probabilities
 
 
-def fix_mask(mask, threshold=80):
-    mask *= 255
-    mask = mask.astype(np.uint8)
+def fix_mask(mask, threshold=0.3):
     mask[mask > threshold] = 255
     mask[mask <= threshold] = 0
+    mask = mask.astype(np.uint8)
     return mask
 
 

@@ -21,9 +21,10 @@
             "justMyCode": false,
             "args": [
                 "--compute-embeddings",
-                "--description", "Rerun base run",
-                "--run-name", "base-run-2",
-                "--run-tests",
+                "--description", "",
+                "--run-name", "",
+                // "--run-tests",
+                // "--use-sample-weights",
             ],
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/training",
@@ -37,18 +38,15 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
-                "--epochs",
-                "20",
-                "--learning-rate",
-                "0.0000001",
-                "--classes",
-                "1",
-                "--scale",
-                "1",
-                "--batch-size",
-                "2",
+                "--epochs", "20",
+                "--learning-rate", "0.0000001",
+                "--classes", "1",
+                "--scale", "1",
+                "--batch-size", "2",
                 "--amp",
-                // "--run-tests"
+                // "--run-tests",
+                "--threshold", "0.3",
+                // "--use-sample-weights",
             ]
         },
         {
@@ -62,6 +60,7 @@
                 // "--create-table", 
                 "--compute-metrics",
                 "--project-name", "chessvision-testing",
+                "--threshold", "0.3",
                 // "--dataset-name", "testing-top-k",
                 // "--table-name", "17mai",
                 // "--image-folder=C:/Project/ChessVision-3LC/output"
@@ -76,9 +75,39 @@
             "args": [
                 "--bucket", "chessvision-bucket",
                 "--start_date", "2024-05-17",
-                // "--boto_output",
                 "--output_folder", "${workspaceFolder}/output"
             ]
+        },
+        {
+            "name": "Run Web Server",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/webroot/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--local", "server"
+            ],
+            "env": {
+                "FLASK_ENV": "development",
+                "FLASK_DEBUG": "1"
+            }
+        },
+        {
+            "name": "Run Compute Endpoint",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/computeroot/cv_endpoint.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--local"
+            ],
+            "env": {
+                "FLASK_ENV": "development",
+                "FLASK_DEBUG": "1",
+                "PYTHONPATH": "${workspaceFolder}"
+            }
         }
     ]
 }

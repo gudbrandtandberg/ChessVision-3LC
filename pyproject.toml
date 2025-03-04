@@ -6,6 +6,7 @@ authors = ["Gudbrand Tandberg <gudbrandduff@fmail.com>"]
 readme = "README.md"
 
 [tool.ruff]
+exclude = ["chessvision/pytorch_unet"]
 line-length = 120
 select = ["C", "E", "F", "W", "I", "YTT", "UP"]
 

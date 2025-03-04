@@ -1,0 +1,60 @@
+body {
+    background-color: tan;
+    color: black;
+}
+
+#wrapper {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+#header-wrapper {
+    margin-left: 20px;
+}
+
+#board-container {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+#board {
+    width: 100%;
+}
+
+#preview-container {
+    margin-bottom: 10px;
+}
+
+/* #crop-area {
+    border-color: purple;
+    border: 2px;
+} */
+
+#server-status {
+    position: absolute;
+    margin: 2px 2px;
+    top: 0;
+    right: 0;
+}
+
+#upload-pane {
+    margin-bottom: 10px;
+}
+
+#image-preview {
+    max-width: 100%;
+}
+
+#logo {
+    height: 64px;
+}
+
+.progress {
+    background-color: black;
+    border: solid 1px black;
+}
+
+.progress-bar {
+    background-color: white;
+    color: lightcoral;
+}

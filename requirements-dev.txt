@@ -13,6 +13,4 @@ python-chess
 tomli
 torchinfo
 cairosvg
-cleanvision[all]
-cleanlab[all]
-nomic
+git+https://github.com/3lc-ai/ultralytics.git
