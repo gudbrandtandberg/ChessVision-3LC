@@ -101,7 +101,7 @@ def main():
 
     # 4. Square Classification
     print("\n=== Square Classification ===")
-    fen, predictions, _, squares, names = classify_board(board_img, classifier, flip=flip)
+    fen, predictions, _, squares, _ = classify_board(board_img, classifier, flip=flip)
 
     print(f"Number of squares extracted: {len(squares)}")
     print("\nFirst row predictions:")
