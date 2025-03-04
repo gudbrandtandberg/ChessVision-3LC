@@ -24,7 +24,10 @@ def extract_board(image, orig, model, threshold=0.3):
     with torch.no_grad():
         logits = model(image_batch)
 
-    probabilities = torch.sigmoid(logits)
+    # TODO: when to use sigmoid? when not? I think we need sigmoid for YOLO models..
+    # probabilities = torch.sigmoid(logits)
+    probabilities = logits
+
     probabilities = probabilities[0].squeeze().cpu().numpy()
     mask = fix_mask(probabilities, threshold=threshold)
 
