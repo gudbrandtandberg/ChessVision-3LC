@@ -24,7 +24,23 @@ A computer vision system for detecting and analyzing chess positions from images
 + Activate the virtual environment: `source .venv/bin/activate`
 + Install dependencies: `pip install -r requirements.txt`
 
-Try it out using the example notebook `example.ipynb`.
+## Examples
+
+### Quick Start
+
+For a quick end-to-end overview of the system, run the Jupyter notebook:
+
+```bash
+jupyter notebook examples/quickstart-example.ipynb
+```
+
+### Detailed Pipeline
+
+For a detailed breakdown of each step in the pipeline, run the Python script:
+
+```bash
+python examples/detailed-example.py
+```
 
 ## Training
 
