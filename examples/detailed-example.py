@@ -7,10 +7,10 @@ technical information at each stage. This is intended for developers and researc
 who want to understand the data flow and transformations.
 """
 
-import io
 from pathlib import Path
 
 import cv2
+import numpy as np
 import torch
 
 from chessvision.board_extraction.train_unet import load_checkpoint as load_extractor_checkpoint
@@ -19,7 +19,14 @@ from chessvision.piece_classification.train_classifier import load_checkpoint as
 from chessvision.predict.classify_board import classify_board
 from chessvision.predict.extract_board import extract_board
 from chessvision.pytorch_unet.unet.unet_model import UNet
-from chessvision.utils import DATA_ROOT, INPUT_SIZE, best_classifier_weights, best_extractor_weights, get_device
+from chessvision.utils import (
+    DATA_ROOT,
+    INPUT_SIZE,
+    best_classifier_weights,
+    best_extractor_weights,
+    get_device,
+    label_names,
+)
 
 
 def print_tensor_info(name, tensor):
@@ -38,6 +45,9 @@ def print_tensor_info(name, tensor):
 
 
 def main():
+    flip = False  # Wether the board is shown from the white side
+    threshold = 0.3  # Threshold for the board extraction
+
     device = get_device()
     print(f"Using device: {device}")
 
@@ -49,6 +59,7 @@ def main():
     extractor = UNet(n_channels=3, n_classes=1)
     extractor = extractor.to(memory_format=torch.channels_last)
     extractor = load_extractor_checkpoint(extractor, best_extractor_weights)
+    print("Using extractor weights: ", best_extractor_weights)
     extractor.eval()
     extractor.to(device)
     print(f"Total parameters: {sum(p.numel() for p in extractor.parameters()):,}")
@@ -57,6 +68,7 @@ def main():
     print("\nInitializing classifier...")
     classifier = get_classifier_model()
     classifier, _, _, _ = load_classifier_checkpoint(classifier, None, best_classifier_weights)
+    print("Using classifier weights: ", best_classifier_weights)
     classifier.eval()
     classifier.to(device)
     print(f"Total parameters: {sum(p.numel() for p in classifier.parameters()):,}")
@@ -75,7 +87,7 @@ def main():
     # 3. Board Extraction
     print("\n=== Board Extraction ===")
     try:
-        board_img, mask = extract_board(comp_image, original_img, extractor, threshold=0.3)
+        board_img, mask = extract_board(comp_image, original_img, extractor, threshold=threshold)
         if board_img is None:
             print("Failed to extract board!")
             return
@@ -89,13 +101,14 @@ def main():
 
     # 4. Square Classification
     print("\n=== Square Classification ===")
-    fen, predictions, chessboard, squares, names = classify_board(board_img, classifier)
+    fen, predictions, _, squares, names = classify_board(board_img, classifier, flip=flip)
 
     print(f"Number of squares extracted: {len(squares)}")
     print("\nFirst row predictions:")
-    for i, (name, pred) in enumerate(zip(names[:8], predictions[:8])):
+    for i, pred in enumerate(predictions[:8]):
         confidence = torch.softmax(torch.tensor(pred), dim=0).max().item()
-        print(f"  Square {chr(97 + i)}8: {name:12} (confidence: {confidence:.2%})")
+        piece_name = label_names[np.argmax(pred)]
+        print(f"  Square {chr(97 + i)}8: {piece_name:12} (confidence: {confidence:.2%})")
 
     # 5. Final Results
     print("\n=== Final Results ===")
