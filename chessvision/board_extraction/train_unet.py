@@ -118,7 +118,7 @@ def train_model(
     use_sample_weights: bool = False,
 ):
     # 1. Create dataset
-    dataset = BasicDataset(dir_img, dir_mask, img_scale)
+    dataset = BasicDataset(dir_img.as_posix(), dir_mask.as_posix(), img_scale)
 
     # 2. Split into train / validation partitions
     n_val = int(len(dataset) * val_percent)
@@ -365,8 +365,8 @@ if __name__ == "__main__":
         f"Network:\n"
         f"\t{model.n_channels} input channels\n"
         f"\t{model.n_classes} output channels (classes)\n"
-        f'\t{"Bilinear" if model.bilinear else "Transposed conv"} upscaling'
-        f'\t{"Device: " + str(device)}'
+        f"\t{'Bilinear' if model.bilinear else 'Transposed conv'} upscaling"
+        f"\t{'Device: ' + str(device)}"
     )
 
     if args.load:
