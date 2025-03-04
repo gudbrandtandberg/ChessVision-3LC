@@ -23,6 +23,7 @@ LABEL_NAMES = ["f", "P", "p", "R", "r", "N", "n", "B", "b", "Q", "q", "K", "k"]
 BLACK_BOARD = Image.fromarray(np.zeros(INPUT_SIZE).astype(np.uint8))
 BLACK_CROP = Image.fromarray(np.zeros(PIECE_SIZE).astype(np.uint8))
 
+
 def accuracy(a, b):
     return sum([aa == bb for aa, bb in zip(a, b)]) / len(a)
 
@@ -42,15 +43,20 @@ def top_k_accuracy(predictions, true_labels, k=3):
 
     for i in range(64):
         for j in range(k):
-            top_k_predictions[i, j] = list(labels.keys())[top_k[i, j]]
+            try:
+                _top_k = list(labels.keys())[top_k[i, j]]
+            except IndexError:
+                _top_k = "f"
+            top_k_predictions[i, j] = _top_k
 
     for square_ind in range(64):
         for j in range(k):
-            if true_labels[square_ind] in top_k_predictions[square_ind, -j-1:]:
+            if true_labels[square_ind] in top_k_predictions[square_ind, -j - 1 :]:
                 hits[j] += 1
 
     accuracies = [hit / 64 for hit in hits]
     return tuple(accuracies)
+
 
 def snake(squares):
     assert len(squares) == 64
@@ -92,7 +98,7 @@ def run_tests(
     run: tlc.Run | None = None,
     extractor: torch.nn.Module | None = None,
     classifier: torch.nn.Module | None = None,
-    threshold=80,
+    threshold=0.3,
     compute_metrics=True,
     create_table=False,
     project_name=PROJECT_NAME,
@@ -121,6 +127,8 @@ def run_tests(
         "true_labels": tlc.CategoricalLabel("true_labels", LABEL_NAMES),
         "predicted_labels": tlc.CategoricalLabel("predicted_labels", LABEL_NAMES),
         "rendered_board": tlc.Schema(value=tlc.ImageUrlStringValue("rendered_board")),
+        "extracted_board": tlc.Schema(value=tlc.ImageUrlStringValue("extracted_board")),
+        "predicted_masks": tlc.Schema(value=tlc.ImageUrlStringValue("predicted_masks")),
     }
     if not table_writer:
         metrics_schemas = {"raw_img": tlc.PILImage("raw_img"), **metrics_schemas}
@@ -138,7 +146,7 @@ def run_tests(
     times = []
     test_set_size = len(listdir_nohidden(image_folder))
 
-    with tlc.bulk_data_url_context(run.bulk_data_url):
+    with tlc.bulk_data_url_context(run.bulk_data_url, metrics_writer.url):
         for index, (filename, img) in tqdm(enumerate(data_generator), total=test_set_size, desc="Classifying images"):
             start = time.time()
             board_img, mask, predictions, chessboard, _, squares, _ = classify_raw(
@@ -181,8 +189,17 @@ def run_tests(
                 metrics_writer.add_batch(metrics_batch)
                 continue
 
-            if compute_metrics:
+            # Save the predicted mask
+            predicted_mask_url = Path((run.bulk_data_url / "predicted_masks" / (filename[:-4] + ".png")).to_str())
+            predicted_mask_url.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray(mask.astype(np.uint8)).save(predicted_mask_url)
 
+            # Save the extracted board
+            extracted_board_url = Path((run.bulk_data_url / "extracted_board" / (filename[:-4] + ".png")).to_str())
+            extracted_board_url.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray(board_img).save(extracted_board_url)
+
+            if compute_metrics:
                 # Load the true labels
                 truth_file = truth_folder / (filename[:-4] + ".txt")
 
@@ -212,8 +229,8 @@ def run_tests(
                     "raw_img": [Image.open(str(image_folder / filename))] * 64,
                 }
                 metrics_batch = {
-                    "predicted_masks": [Image.fromarray(mask.astype(np.uint8))] * 64,
-                    "extracted_board": [Image.fromarray(board_img)] * 64,
+                    "predicted_masks": [str(predicted_mask_url)] * 64,
+                    "extracted_board": [str(extracted_board_url)] * 64,
                     "rendered_board": [str(svg_url)] * 64,
                     "accuracy": [top_1] * 64,
                     "square_crop": [Image.fromarray(img.squeeze()) for img in squares],
@@ -239,8 +256,8 @@ def run_tests(
                 }
 
                 metrics_batch = {
-                    "predicted_masks": [Image.fromarray(mask.astype(np.uint8))],
-                    "extracted_board": [Image.fromarray(board_img)],
+                    "predicted_masks": [str(predicted_mask_url)],
+                    "extracted_board": [str(extracted_board_url)],
                     "rendered_board": [str(svg_url)],
                     "example_id": [index],
                     "is_failed": [False],
@@ -265,7 +282,7 @@ def run_tests(
             "avg_time_per_prediction": sum(times) / test_set_size,
         }
 
-        run.set_parameters({"test_results": aggregate_data})
+        run.set_parameters({"test_results": aggregate_data, "threshold": threshold})
 
     print(f"Classified {test_set_size} raw images")
     metrics_table = metrics_writer.finalize()
@@ -278,13 +295,13 @@ def run_tests(
     return run
 
 
-def parse_arts():
+def parse_args():
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--image-folder", type=str, default=str(TEST_DATA_DIR / "raw"))
     argparser.add_argument("--truth-folder", type=str, default=str(TEST_DATA_DIR / "ground_truth"))
     argparser.add_argument("--create-table", action="store_true")
     argparser.add_argument("--compute-metrics", action="store_true")
-    argparser.add_argument("--threshold", type=int, default=80)
+    argparser.add_argument("--threshold", type=float, default=0.3)
     argparser.add_argument("--project-name", type=str, default="chessvision-testing")
     argparser.add_argument("--dataset-name", type=str, default="dataset")
     argparser.add_argument("--table-name", type=str, default="table")
@@ -294,7 +311,7 @@ def parse_arts():
 
 if __name__ == "__main__":
     print("Running ChessVision test suite...")
-    args = parse_arts()
+    args = parse_args()
     start = time.time()
 
     run = run_tests(

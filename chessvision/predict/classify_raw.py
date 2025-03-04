@@ -14,6 +14,7 @@ from chessvision.utils import (
     INPUT_SIZE,
     best_classifier_weights,
     best_extractor_weights,
+    get_device,
 )
 
 logger = logging.getLogger("chessvision")
@@ -28,7 +29,7 @@ def load_classifier(checkpoint_path: str = best_classifier_weights):
     if sq_model is not None:
         return sq_model
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
     classifier = get_classifier_model()
     classifier, _, _, _ = load_classifier_checkpoint(classifier, None, checkpoint_path)
     classifier.eval()
@@ -43,7 +44,7 @@ def load_board_extractor(checkpoint_path: str = best_extractor_weights):
     if board_model is not None:
         return board_model
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
 
     extractor = UNet(n_channels=3, n_classes=1)
     extractor = extractor.to(memory_format=torch.channels_last)
@@ -61,7 +62,7 @@ def classify_raw(
     board_model=None,
     sq_model=None,
     flip=False,
-    threshold=80,
+    threshold=0.3,
 ):
     logger.debug(f"Processing image {filename}")
 

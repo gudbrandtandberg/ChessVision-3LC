@@ -7,10 +7,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from chessvision.utils import get_device
+
 from .extract_squares import extract_squares
 
 label_names = ["B", "K", "N", "P", "Q", "R", "b", "k", "n", "p", "q", "r", "f"]
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = get_device()
 
 
 def classify_board(board_img, model, flip=False):
