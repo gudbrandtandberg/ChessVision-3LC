@@ -13,10 +13,8 @@ import cv2
 import numpy as np
 import torch
 
-from chessvision.board_extraction.train_unet import load_checkpoint as load_extractor_checkpoint
-from chessvision.piece_classification.train_classifier import get_classifier_model
-from chessvision.piece_classification.train_classifier import load_checkpoint as load_classifier_checkpoint
 from chessvision.predict.classify_board import classify_board
+from chessvision.predict.classify_raw import get_classifier_model, load_classifier_checkpoint, load_extractor_checkpoint
 from chessvision.predict.extract_board import extract_board
 from chessvision.pytorch_unet.unet.unet_model import UNet
 from chessvision.utils import (

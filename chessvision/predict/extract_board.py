@@ -71,7 +71,7 @@ class BoardExtractor:
         quadrangle = self._find_quadrangle(mask)
 
         # Calculate confidence score
-        confidence = self._calculate_confidence(probabilities, mask)
+        confidence = self._calculate_confidence(probabilities)
 
         # If no board found, return early
         if quadrangle is None:

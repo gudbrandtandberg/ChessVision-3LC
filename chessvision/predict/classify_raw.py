@@ -3,7 +3,7 @@ import logging
 import cv2
 import torch
 
-from chessvision.piece_classification.train_classifier import NUM_CLASSES, get_classifier_model
+from chessvision.piece_classification.train_classifier import get_classifier_model
 from chessvision.piece_classification.train_classifier import load_checkpoint as load_classifier_checkpoint
 from chessvision.predict.classify_board import classify_board
 from chessvision.predict.extract_board import extract_board
