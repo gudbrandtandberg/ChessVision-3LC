@@ -15,11 +15,12 @@ from torchvision import transforms as T
 from tqdm import tqdm
 
 from chessvision.board_extraction.loss_collector import LossCollector
+from chessvision.predict.classify_raw import load_extractor_checkpoint
 from chessvision.pytorch_unet.evaluate import evaluate
 from chessvision.pytorch_unet.unet import UNet
 from chessvision.pytorch_unet.utils.data_loading import BasicDataset
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
-from chessvision.utils import DATA_ROOT, best_extractor_weights, extractor_weights_dir, get_device
+from chessvision.utils import DATA_ROOT, best_extractor_weights, get_device
 
 DATASET_ROOT = f"{DATA_ROOT}/board_extraction"
 tlc.register_url_alias(
@@ -37,17 +38,8 @@ assert dir_img.exists()
 assert dir_mask.exists()
 
 
-def load_checkpoint(model: torch.nn.Module, checkpoint_path: str):
-    device = get_device()
-    state_dict = torch.load(checkpoint_path, map_location=device)
-    # del state_dict["mask_values"]
-    model.load_state_dict(state_dict)
-    logging.info(f"Model loaded from {checkpoint_path}")
-    return model
-
-
-def _save_checkpoint(model: torch.nn.Module, checkpoint_path: str):
-    state_dict = model.state_dict()
+def save_extractor_checkpoint(model: torch.nn.Module, checkpoint_path: str, metadata: dict[str, Any]):
+    state_dict = {"model_state_dict": model.state_dict(), "metadata": metadata}
     torch.save(state_dict, checkpoint_path)
 
 
@@ -116,6 +108,10 @@ def train_model(
     project_name: str = "chessvision-segmentation",
     run_name: str | None = None,
     use_sample_weights: bool = False,
+    validations_per_epoch: int = 2,
+    collection_frequency: int = 5,
+    patience: int = 5,
+    threshold: float = 0.3,
 ):
     # 1. Create dataset
     dataset = BasicDataset(dir_img.as_posix(), dir_mask.as_posix(), img_scale)
@@ -134,7 +130,7 @@ def train_model(
 
     # Write checkpoints in the run directory
     checkpoint_path = run.bulk_data_url / "checkpoint.pth"
-    checkpoint_path.make_parents(True)  # !?
+    checkpoint_path.make_parents(True)
 
     sample_structure = {
         "image": tlc.PILImage("image"),
@@ -146,9 +142,10 @@ def train_model(
             dataset=val_set,
             dataset_name="chessboard-segmentation-val",
             structure=sample_structure,
-            if_exists="rename",
-        ).map(TransformSampleToModel())
-        # .revision(None)
+            if_exists="reuse",
+        )
+        .map(TransformSampleToModel())
+        .revision(None)
     )
 
     tlc_train_dataset = (
@@ -156,27 +153,31 @@ def train_model(
             dataset=train_set,
             dataset_name="chessboard-segmentation-train",
             structure=sample_structure,
-            if_exists="rename",
-        ).map(TransformSampleToModel())
-        # .revision(None)
+            if_exists="reuse",
+        )
+        .map(TransformSampleToModel())
+        .revision(table_name="train-cleaned-filtered")
     )
 
-    print(f"Using training table {tlc_train_dataset.url}")
-    print(f"Using validation table {tlc_val_dataset.url}")
+    logging.info(f"Using training table {tlc_train_dataset.url}")
+    logging.info(f"Using validation table {tlc_val_dataset.url}")
 
     # 3. Create data loaders
-    loader_args = {"batch_size": batch_size, "num_workers": 0, "pin_memory": True}
     train_loader = DataLoader(
         tlc_train_dataset,
         shuffle=False if use_sample_weights else True,
         sampler=tlc_train_dataset.create_sampler() if use_sample_weights else None,
-        **loader_args,
+        batch_size=batch_size,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True,
     )
     val_loader = DataLoader(
         tlc_val_dataset,
         shuffle=False,
         drop_last=True,
-        **loader_args,
+        batch_size=batch_size,
+        pin_memory=True,
     )
 
     logging.info(
@@ -190,7 +191,7 @@ def train_model(
         Device:           {device.type}
         Images scaling:   {img_scale}
         Mixed Precision:  {amp}
-        Sampling weights: {args.use_sample_weights}
+        Sampling weights: {use_sample_weights}
     """
     )
 
@@ -203,17 +204,47 @@ def train_model(
         foreach=True,
     )
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "max", patience=3)  # goal: maximize Dice score
-    grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
+    grad_scaler = torch.amp.GradScaler("cuda", enabled=amp)
     criterion = nn.BCEWithLogitsLoss()
     global_step = 0
-    best_val_score = 0.0
+    best_val_score = float("-inf")
+    patience_counter = 0
+
+    # Set model memory format
+    model = model.to(memory_format=torch.channels_last)
+
+    # Calculate validation interval based on epochs rather than steps
+    total_steps = n_train // batch_size
+    validation_interval = total_steps // validations_per_epoch
+
+    # Calculate collection epochs dynamically
+    collection_epochs = list(range(collection_frequency, epochs + 1, collection_frequency))
+
+    # Ensure at least one collection at the end
+    if epochs not in collection_epochs:
+        collection_epochs.append(epochs)
+
+    # Add training config to metadata
+    training_config = {
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "learning_rate": learning_rate,
+        "amp": amp,
+        "threshold": threshold,
+        # ... other relevant parameters
+    }
+
+    # Save initial model state
+    save_extractor_checkpoint(
+        model, checkpoint_path, {"epoch": 0, "best_val_score": float("-inf"), "training_config": training_config}
+    )
 
     # 5. Begin training
     for epoch in range(1, epochs + 1):
         model.train()
         epoch_loss = 0
         with tqdm(total=n_train, desc=f"Epoch {epoch}/{epochs}", unit="img") as pbar:
-            for batch in train_loader:
+            for i, batch in enumerate(train_loader):
                 images, true_masks = batch["image"], batch["mask"]
 
                 assert images.shape[1] == model.n_channels, (
@@ -222,15 +253,16 @@ def train_model(
                     "the images are loaded correctly."
                 )
 
+                # Ensure inputs match model's memory format
                 images = images.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
-                true_masks = true_masks.to(device=device, dtype=torch.long)
+                true_masks = true_masks.to(device=device, dtype=torch.float32)
 
                 with torch.autocast(device.type if device.type != "mps" else "cpu", enabled=amp):
                     masks_pred = model(images)
-                    loss = criterion(masks_pred, true_masks.float())
+                    loss = criterion(masks_pred, true_masks)
                     loss += dice_loss(
                         torch.sigmoid(masks_pred),
-                        true_masks.float(),
+                        true_masks,
                         multiclass=False,
                         reduce_batch_first=False,
                     )
@@ -247,31 +279,42 @@ def train_model(
 
                 pbar.set_postfix(**{"loss (batch)": loss.item()})
 
-                # Evaluation round
-                division_step = n_train // (2 * batch_size)
-                if division_step > 0:
-                    if global_step % division_step == 0:
-                        val_score = evaluate(model, val_loader, device, amp)
-                        scheduler.step(val_score)
+                # Run validation based on interval
+                if i > 0 and i % validation_interval == 0:
+                    val_score = evaluate(model, val_loader, device, amp)
+                    scheduler.step(val_score)
 
-                        tlc.log(
-                            {
-                                "val_dice": val_score.item(),
-                                "step": global_step,
-                                "lr": optimizer.param_groups[0]["lr"],
-                            }
-                        )
-                        logging.info(f"Validation Dice score: {val_score}")
+                    tlc.log(
+                        {
+                            "val_dice": val_score.item(),
+                            "step": global_step,
+                            "lr": optimizer.param_groups[0]["lr"],
+                        }
+                    )
 
         if save_checkpoint and val_score > best_val_score:
-            best_val_score = val_score.item()
-            _save_checkpoint(model, checkpoint_path)
-            logging.info(f"Checkpoint {epoch} saved! (Dice score: {best_val_score})")
+            best_val_score = val_score
+            patience_counter = 0
+            save_extractor_checkpoint(
+                model,
+                checkpoint_path,
+                metadata={
+                    "best_val_score": best_val_score,
+                    "run_name": run.name,
+                },
+            )
+            logging.info(f"Checkpoint {epoch} saved! (Dice score: {best_val_score}, run: {run.name})")
+        else:
+            patience_counter += 1
+
+        if patience_counter >= patience:
+            print(f"Early stopping triggered after {epoch} epochs")
+            break
 
         tlc.log({"train_loss": epoch_loss / n_train, "epoch": epoch})
 
         # Collect per-sample metrics using tlc every 5 epochs
-        if epoch in [10, 20]:
+        if epoch in collection_epochs:
             predictor = tlc.Predictor(
                 model=model,
                 layers=[52],
@@ -303,7 +346,11 @@ def train_model(
                 dataloader_args={"batch_size": 4},
             )
 
-    print("Training completed. Reducing embeddings to 2 dimensions using pacmap...")
+        # Clear cache between epochs
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    logging.info("Training completed. Reducing embeddings to 2 dimensions using pacmap...")
     run.reduce_embeddings_by_foreign_table_url(
         tlc_train_dataset.url,
         delete_source_tables=True,
@@ -316,6 +363,8 @@ def train_model(
             "best_val_score": best_val_score,
             "model_path": checkpoint_path.apply_aliases().to_str(),
             "use_sample_weights": use_sample_weights,
+            "train_table": tlc_train_dataset.url.apply_aliases().to_str(),
+            "val_table": tlc_val_dataset.url.apply_aliases().to_str(),
         }
     )
     return run, checkpoint_path
@@ -353,7 +402,7 @@ def get_args():
 if __name__ == "__main__":
     args = get_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     device = get_device()
     logging.info(f"Using device {device}")
@@ -370,7 +419,7 @@ if __name__ == "__main__":
     )
 
     if args.load:
-        load_checkpoint(model, best_extractor_weights)
+        load_extractor_checkpoint(model, best_extractor_weights)
 
     model.to(device=device)
 
@@ -386,6 +435,10 @@ if __name__ == "__main__":
         project_name=args.project_name,
         run_name=args.run_name,
         use_sample_weights=args.use_sample_weights,
+        validations_per_epoch=2,
+        collection_frequency=5,
+        patience=5,
+        threshold=args.threshold,
     )
     if args.run_tests:
         from chessvision.test import run_tests
@@ -394,7 +447,7 @@ if __name__ == "__main__":
 
         model = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
         model = model.to(memory_format=torch.channels_last)
-        model = load_checkpoint(model, checkpoint_path)
+        model = load_extractor_checkpoint(model, checkpoint_path)
         model.to(device=device)
 
         run_tests(run=run, extractor=model, threshold=args.threshold)

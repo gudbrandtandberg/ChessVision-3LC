@@ -1,10 +1,8 @@
 import logging
 
 import cv2
-import timm
 import torch
 
-from chessvision.board_extraction.train_unet import load_checkpoint as load_extractor_checkpoint
 from chessvision.piece_classification.train_classifier import NUM_CLASSES, get_classifier_model
 from chessvision.piece_classification.train_classifier import load_checkpoint as load_classifier_checkpoint
 from chessvision.predict.classify_board import classify_board
@@ -23,6 +21,33 @@ board_model: torch.nn.Module | None = None
 sq_model: torch.nn.Module | None = None
 
 
+def load_extractor_checkpoint(model: torch.nn.Module, checkpoint_path: str):
+    """Load a model checkpoint with backward compatibility support."""
+    device = get_device()
+    state_dict = torch.load(checkpoint_path, map_location=device)
+
+    # Handle different checkpoint formats
+    if isinstance(state_dict, dict) and "model_state_dict" in state_dict:
+        # New format
+        model.load_state_dict(state_dict["model_state_dict"])
+        metadata = state_dict.get("metadata", {})
+    else:
+        # Old format - state_dict is directly the model weights
+        # or has "model" key instead of "model_state_dict"
+        if "model" in state_dict:
+            model_weights = state_dict["model"]
+            metadata = state_dict.get("metadata", {})
+        else:
+            model_weights = state_dict
+            metadata = {}
+        model.load_state_dict(model_weights)
+
+    if metadata:
+        model.metadata = metadata
+
+    return model
+
+
 def load_classifier(checkpoint_path: str = best_classifier_weights):
     global sq_model
 
@@ -39,13 +64,13 @@ def load_classifier(checkpoint_path: str = best_classifier_weights):
 
 
 def load_board_extractor(checkpoint_path: str = best_extractor_weights):
+    """Load the board extraction model."""
     global board_model
 
     if board_model is not None:
         return board_model
 
     device = get_device()
-
     extractor = UNet(n_channels=3, n_classes=1)
     extractor = extractor.to(memory_format=torch.channels_last)
     extractor = load_extractor_checkpoint(extractor, checkpoint_path)

@@ -1,5 +1,5 @@
 """
-CNN-based board extraction.
+CNN and computer vision based board extraction.
 Methods to extract chess boards from images.
 """
 
@@ -48,7 +48,7 @@ class BoardExtractor:
 
         Args:
             image: Preprocessed input image (256x256)
-            orig_image: Original input image at full resolution
+            orig_image: Original input image (512x512)
             model: PyTorch model for board segmentation (overrides the one set in constructor)
             threshold: Probability threshold for mask binarization
 
@@ -95,7 +95,7 @@ class BoardExtractor:
             confidence=confidence,
         )
 
-    def _calculate_confidence(self, probabilities: np.ndarray, mask: np.ndarray) -> float:
+    def _calculate_confidence(self, probabilities: np.ndarray) -> float:
         """Calculate confidence score for the extraction."""
         # Use the top 25% most confident predictions
         flat_probs = probabilities.flatten()
