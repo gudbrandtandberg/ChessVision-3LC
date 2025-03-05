@@ -85,7 +85,7 @@ def download_raw_data(
 
     total_files = 0
     current_date = start_date
-
+    # TODO: use continuation token
     while current_date <= end_date:
         prefix = f"raw-uploads/{current_date.year}/{current_date.month}/{current_date.day}/"
 

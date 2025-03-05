@@ -1,4 +1,5 @@
 from datetime import datetime
+from pprint import pprint
 
 from process_pipeline import run_pipeline
 
@@ -15,4 +16,4 @@ results = run_pipeline(
     dry_run=False,
 )
 
-print(results)
+pprint(results, indent=2, width=80)
