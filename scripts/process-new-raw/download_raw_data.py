@@ -4,6 +4,11 @@ Download raw chess images from S3 bucket for a specific date or date range.
 
 This script downloads images from an S3 bucket organized by date hierarchy
 (raw-uploads/YYYY/MM/DD/) and saves them to a local folder.
+
+Example usage:
+    # Download images from Nov 1-2, 2024
+    python download_raw_data.py --start_date 2024-11-1 --end_date 2024-11-2
+
 """
 
 import argparse
@@ -119,7 +124,7 @@ def main():
     # Set up logging
     logging.basicConfig(
         level=logging.INFO,
-        format="%(levelname)s - %(message)s",
+        format="%(message)s",
     )
 
     args = parse_arguments()
@@ -161,6 +166,7 @@ def main():
 
     action = "Listed" if dry_run else "Downloaded"
     logger.info(f"{action} {total_files} files in total")
+    logger.info(f"Output folder: {output_folder.absolute()}")
 
 
 if __name__ == "__main__":
