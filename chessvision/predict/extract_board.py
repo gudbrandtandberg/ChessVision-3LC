@@ -17,18 +17,42 @@ from ..utils import BOARD_SIZE, get_device, ratio
 device = get_device()
 
 
-def extract_board(image, orig, model, threshold=0.3):
+def preprocess_image(image, device):
+    """Preprocess image for model input."""
     image_batch = torch.Tensor(np.array([image])) / 255
     image_batch = image_batch.permute(0, 3, 1, 2).to(device)
+    return image_batch
 
+
+def get_probabilities(model, image_batch):
+    """Get probability mask from model, applying sigmoid if needed."""
     with torch.no_grad():
         logits = model(image_batch)
 
-    # TODO: when to use sigmoid? when not? I think we need sigmoid for YOLO models..
-    # probabilities = torch.sigmoid(logits)
-    probabilities = logits
+    # Check if logits need sigmoid activation
+    sample_values = logits[0].flatten()[:10].cpu().numpy()
+    needs_sigmoid = np.any(sample_values < 0) or np.any(sample_values > 1)
 
-    probabilities = probabilities[0].squeeze().cpu().numpy()
+    if needs_sigmoid:
+        probabilities = torch.sigmoid(logits)
+    else:
+        probabilities = logits
+
+    return probabilities[0].squeeze().cpu().numpy()
+
+
+def process_board(orig, approx, board_size):
+    """Process extracted board to final format."""
+    board = extract_perspective(orig, approx, board_size)
+    if len(board.shape) == 3:  # If image has multiple channels
+        board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
+    board = cv2.flip(board, 1)  # TODO: permute approximation instead..
+    return board
+
+
+def extract_board(image, orig, model, threshold=0.3):
+    image_batch = preprocess_image(image, device)
+    probabilities = get_probabilities(model, image_batch)
     mask = fix_mask(probabilities, threshold=threshold)
 
     # approximate chessboard-mask with a quadrangle
@@ -40,10 +64,7 @@ def extract_board(image, orig, model, threshold=0.3):
     approx = scale_approx(approx, (orig.shape[0], orig.shape[1]))
 
     # extract board
-    board = extract_perspective(orig, approx, BOARD_SIZE)
-
-    board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
-    board = cv2.flip(board, 1)  # TODO: permute approximation instead..
+    board = process_board(orig, approx, BOARD_SIZE)
 
     return board, probabilities
 
