@@ -10,10 +10,10 @@ import tlc
 import torch
 import torchvision.transforms.v2 as v2
 import tqdm
-from PIL import Image
+from PIL import Image, ImageOps
 
 from chessvision.predict.classify_raw import load_board_extractor
-from chessvision.predict.extract_board import extract_board, find_quadrangle, fix_mask, process_board, scale_approx
+from chessvision.predict.extract_board import BoardExtractor
 from chessvision.utils import BOARD_SIZE, INPUT_SIZE, get_device
 
 data_dir = Path("../../output/nov-1-2-2024").absolute()
@@ -66,6 +66,7 @@ table.map(map_fn)
 run = tlc.init("chessvision-new-raw", "raw-data-nov-1-2-2024")
 
 model = load_board_extractor()
+board_extractor = BoardExtractor(model)
 
 
 def custom_metrics_collector(batch, predictor_output):
@@ -93,36 +94,48 @@ def custom_metrics_collector(batch, predictor_output):
 
         # Extract board from the image
         prob_np = probs[i].cpu().numpy()
-        mask = fix_mask(prob_np, threshold=0.3)
 
         # Get original image from batch and convert to numpy array in 0-255 range
         orig_image = (batch[i].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
 
-        # Find quadrangle and extract board
-        approx = find_quadrangle(mask)
-        if approx is not None:
-            # Scale approximation to original image size
-            approx = scale_approx(approx, (orig_image.shape[0], orig_image.shape[1]))
+        # Use our new BoardExtractor class
+        result = board_extractor.extract_board(
+            cv2.resize(orig_image, INPUT_SIZE, interpolation=cv2.INTER_AREA),
+            orig_image,
+            threshold=0.3,
+        )
 
-            # Extract and process board
-            board = process_board(orig_image, approx, BOARD_SIZE)
-
+        # Add extracted board to results
+        if result.board_image is not None:
             # Convert to PIL image
-            pil_board = Image.fromarray(board)
+            pil_board = Image.fromarray(result.board_image)
             extracted_boards.append(pil_board)
         else:
             # If no board was found, create a black image
             black_image = Image.new("RGB", (512, 512), color="black")
             extracted_boards.append(black_image)
 
-        # Convert logits to grayscale PIL image
-        # Normalize to 0-255 range
-        logit_np = prob_np.copy()  # Use probability map
-        logit_np = (logit_np).astype(np.uint8)
-        logit_image = Image.fromarray(logit_np, mode="L")  # 'L' is for grayscale
+        # Convert probability mask to grayscale PIL image with enhanced contrast
+        # First, ensure full 0-1 range by normalizing
+        logit_np = result.probability_mask.copy()
+        min_val = logit_np.min()
+        max_val = logit_np.max()
+        if max_val > min_val:  # Avoid division by zero
+            logit_np = (logit_np - min_val) / (max_val - min_val)
+
+        # Convert to 8-bit grayscale
+        logit_np = (logit_np * 255).astype(np.uint8)
+
+        # Create PIL image and enhance contrast
+        logit_image = Image.fromarray(logit_np, mode="L")
+        # logit_image = ImageOps.autocontrast(logit_image, cutoff=0)  # Enhance contrast
         logit_images.append(logit_image)
 
-    return {"confidence": confidences, "extracted_boards": extracted_boards, "logit_images": logit_images}
+    return {
+        "confidence": confidences,
+        "extracted_boards": extracted_boards,
+        "logit_images": logit_images,
+    }
 
 
 embedding_collector = tlc.EmbeddingsMetricsCollector([52])
