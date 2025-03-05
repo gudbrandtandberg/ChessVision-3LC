@@ -307,10 +307,6 @@ def train_model(
         else:
             patience_counter += 1
 
-        if patience_counter >= patience:
-            print(f"Early stopping triggered after {epoch} epochs")
-            break
-
         tlc.log({"train_loss": epoch_loss / n_train, "epoch": epoch})
 
         # Collect per-sample metrics using tlc every 5 epochs
@@ -345,6 +341,10 @@ def train_model(
                 constants={"step": global_step, "epoch": epoch},
                 dataloader_args={"batch_size": 4},
             )
+
+            if patience_counter >= patience and epoch != epochs:
+                print(f"Early stopping triggered after {epoch} epochs")
+                break
 
         # Clear cache between epochs
         if torch.cuda.is_available():
