@@ -82,6 +82,7 @@ def custom_metrics_collector(batch, predictor_output):
     batch_size = confidence.shape[0]
     confidences = []
     extracted_boards = []
+    logit_images = []
 
     for i in range(batch_size):
         # Take mean of top 25% most confident predictions for each image
@@ -114,13 +115,21 @@ def custom_metrics_collector(batch, predictor_output):
             black_image = Image.new("RGB", (512, 512), color="black")
             extracted_boards.append(black_image)
 
-    return {"confidence": confidences, "extracted_boards": extracted_boards}
+        # Convert logits to grayscale PIL image
+        # Normalize to 0-255 range
+        logit_np = prob_np.copy()  # Use probability map
+        logit_np = (logit_np).astype(np.uint8)
+        logit_image = Image.fromarray(logit_np, mode="L")  # 'L' is for grayscale
+        logit_images.append(logit_image)
+
+    return {"confidence": confidences, "extracted_boards": extracted_boards, "logit_images": logit_images}
 
 
 embedding_collector = tlc.EmbeddingsMetricsCollector([52])
 custom_metrics_collector_schemas = {
-    # "confidence": tlc.Float("confidence"),
+    "confidence": tlc.Float("confidence"),
     "extracted_boards": tlc.PILImage("extracted_boards"),
+    "logit_images": tlc.PILImage("logit_images"),
 }
 tlc.collect_metrics(
     table,
