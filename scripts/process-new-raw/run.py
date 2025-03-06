@@ -10,10 +10,10 @@ end_date = datetime.strptime("2024-11-03", "%Y-%m-%d").date()
 results = run_pipeline(
     start_date=start_date,
     end_date=end_date,
-    skip_download=True,
-    skip_create_table=True,
+    skip_download=False,
+    skip_create_table=False,
     skip_enrich=False,
     dry_run=False,
 )
 
-pprint(results, indent=2, width=80)
+pprint(results, indent=4, width=120)
