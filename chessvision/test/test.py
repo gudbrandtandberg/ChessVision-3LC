@@ -136,6 +136,7 @@ def run_tests(
 
     times = []
     test_set_size = len(listdir_nohidden(image_folder))
+    extraction_failures = 0
 
     with tlc.bulk_data_url_context(run.bulk_data_url, metrics_writer.url):
         for index, (filename, img) in tqdm(enumerate(data_generator), total=test_set_size, desc="Classifying images"):
@@ -158,6 +159,7 @@ def run_tests(
 
             if board_img is None:
                 print(f"Failed to classify {filename}")
+                extraction_failures += 1
 
                 metrics_batch = {
                     "raw_img": [str(image_folder / filename)],
@@ -229,6 +231,7 @@ def run_tests(
         "top_2_accuracy": f"{top_2_accuracy: .3f}",
         "top_3_accuracy": f"{top_3_accuracy: .3f}",
         "avg_time_per_prediction": sum(times) / test_set_size,
+        "extraction_failures": extraction_failures,
     }
 
     run.set_parameters(
