@@ -36,7 +36,7 @@ from chessvision.predict.classify_board import classify_board
 from chessvision.predict.classify_raw import load_board_extractor, load_classifier
 from chessvision.predict.extract_board import BoardExtractor
 from chessvision.test.test import save_svg
-from chessvision.utils import BOARD_SIZE, DATA_ROOT, INPUT_SIZE
+from chessvision.utils import BOARD_SIZE, DATA_ROOT, segmentation_map
 
 # Configure logging
 logging.basicConfig(
@@ -256,21 +256,22 @@ def enrich_tlc_table(
         # Initialize board extractor once
         board_extractor = BoardExtractor()
 
+        # Initialize lists for metrics
+        rendered_boards = []
+        prob_images = []
+        confidences = []
+        quadrangle_scores = []
+        mask_completeness_scores = []
+        prob_distribution_scores = []
+        extracted_boards = []
+        masks = []
+
         for i in range(batch_size):
             # Get original image
             orig_image = (batch[i].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
 
             # Process logits directly - no redundant inference!
             result = board_extractor.process_logits(logits[i].squeeze().cpu().numpy(), orig_image, threshold=threshold)
-
-            # Initialize lists for metrics
-            rendered_boards = []
-            logit_images = []
-            confidences = []
-            quadrangle_scores = []
-            mask_completeness_scores = []
-            prob_distribution_scores = []
-            extracted_boards = []
 
             # Calculate additional metrics
             quad_score = quadrangle_regularity(result.quadrangle)
@@ -299,14 +300,16 @@ def enrich_tlc_table(
                 rendered_boards.append(black_image)
                 extracted_boards.append(black_image)
 
-            # Process mask
-            logit_np = result.probabilities.copy()  # Use probabilities for smoother visualization
-            min_val, max_val = logit_np.min(), logit_np.max()
-            if max_val > min_val:
-                logit_np = (logit_np - min_val) / (max_val - min_val)
-            logit_np = (logit_np * 255).astype(np.uint8)
-            logit_image = Image.fromarray(logit_np, mode="L")
-            logit_images.append(logit_image)
+            masks.append(Image.fromarray(result.binary_mask))
+
+            # Process probabilities
+            probs_np = result.probabilities.copy()  # Use probabilities for smoother visualization
+            # min_val, max_val = probs_np.min(), probs_np.max()
+            # if max_val > min_val:
+            #     probs_np = (probs_np - min_val) / (max_val - min_val)
+            probs_np = (probs_np * 255).astype(np.uint8)
+            probs_image = Image.fromarray(probs_np, mode="L")
+            prob_images.append(probs_image)
 
         return {
             "confidence": confidences,
@@ -315,7 +318,8 @@ def enrich_tlc_table(
             "probability_distribution": prob_distribution_scores,
             "extracted_boards": extracted_boards,
             "rendered_boards": rendered_boards,
-            "logit_images": logit_images,
+            "probs": prob_images,
+            "mask": masks,
         }
 
     # Define collector schemas
@@ -325,7 +329,8 @@ def enrich_tlc_table(
         "mask_completeness": tlc.Float("mask_completeness"),
         "probability_distribution": tlc.Float("probability_distribution"),
         "extracted_boards": tlc.PILImage("extracted_boards"),
-        "logit_images": tlc.PILImage("logit_images"),
+        "probs": tlc.PILImage("probs"),
+        "mask": tlc.SegmentationPILImage("mask", classes=segmentation_map),
         "rendered_boards": tlc.PILImage("rendered_boards"),
     }
 
@@ -349,7 +354,7 @@ def enrich_tlc_table(
             preprocess_fn=v2.Resize((256, 256), antialias=True),
         ),
         collect_aggregates=False,
-        dataloader_args={"batch_size": 1},
+        dataloader_args={"batch_size": 2},
     )
 
     # Reduce embeddings
