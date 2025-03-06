@@ -13,15 +13,22 @@ from PIL import Image
 from tqdm import tqdm
 
 from chessvision.predict.classify_raw import classify_raw
-from chessvision.utils import DATA_ROOT, INPUT_SIZE, PIECE_SIZE, labels, listdir_nohidden
+from chessvision.utils import (
+    BLACK_BOARD,
+    BLACK_BOARD_URL,
+    BLACK_CROP,
+    BLACK_CROP_URL,
+    DATA_ROOT,
+    INPUT_SIZE,
+    PIECE_SIZE,
+    labels,
+    listdir_nohidden,
+)
 
 TEST_DATA_DIR = Path(DATA_ROOT) / "test"
 
 PROJECT_NAME = "chessvision-testing"
 LABEL_NAMES = ["f", "P", "p", "R", "r", "N", "n", "B", "b", "Q", "q", "K", "k"]
-
-BLACK_BOARD = Image.fromarray(np.zeros(INPUT_SIZE).astype(np.uint8))
-BLACK_CROP = Image.fromarray(np.zeros(PIECE_SIZE).astype(np.uint8))
 
 
 def accuracy(a, b):
@@ -160,6 +167,11 @@ def run_tests(
             stop = time.time()
             times.append(stop - start)
 
+            # Save the predicted mask
+            predicted_mask_url = Path((run.bulk_data_url / "predicted_masks" / (filename[:-4] + ".png")).to_str())
+            predicted_mask_url.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray((mask * 255).astype(np.uint8)).save(predicted_mask_url)
+
             if board_img is None:
                 print(f"Failed to classify {filename}")
 
@@ -168,8 +180,8 @@ def run_tests(
                 }
 
                 metrics_batch = {
-                    "predicted_masks": [Image.fromarray(mask.astype(np.uint8))],
-                    "extracted_board": [BLACK_BOARD],
+                    "predicted_masks": [str(predicted_mask_url)],
+                    "extracted_board": [BLACK_BOARD_URL],
                     "rendered_board": [""],
                     "example_id": [index],
                     "is_failed": [True],
@@ -188,11 +200,6 @@ def run_tests(
 
                 metrics_writer.add_batch(metrics_batch)
                 continue
-
-            # Save the predicted mask
-            predicted_mask_url = Path((run.bulk_data_url / "predicted_masks" / (filename[:-4] + ".png")).to_str())
-            predicted_mask_url.parent.mkdir(parents=True, exist_ok=True)
-            Image.fromarray(mask.astype(np.uint8)).save(predicted_mask_url)
 
             # Save the extracted board
             extracted_board_url = Path((run.bulk_data_url / "extracted_board" / (filename[:-4] + ".png")).to_str())
@@ -325,7 +332,7 @@ if __name__ == "__main__":
         threshold=args.threshold,
     )
     stop = time.time()
-    print(f"Tests completed in {stop-start:.1f}s")
+    print(f"Tests completed in {stop - start:.1f}s")
     if "test_results" in run.constants["parameters"]:
         print("Test accuracy: {}".format(run.constants["parameters"]["test_results"]["top_1_accuracy"]))
         print("Top-2 accuracy: {}".format(run.constants["parameters"]["test_results"]["top_2_accuracy"]))
