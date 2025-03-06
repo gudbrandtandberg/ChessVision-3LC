@@ -220,7 +220,7 @@ def enrich_tlc_table(
                 v2.ConvertImageDtype(torch.float32),
             ]
         )
-        return transforms(sample["image"])
+        return transforms(sample)
 
     # Preprocess images
     logger.info("Preprocessing images")
