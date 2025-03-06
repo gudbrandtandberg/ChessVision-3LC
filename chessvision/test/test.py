@@ -108,19 +108,17 @@ def run_tests(
     if not run:
         run = tlc.init(project_name)
 
-    # Set up metrics writer with all columns in one table
-    metrics_schemas = {
-        "raw_img": tlc.Schema(value=tlc.ImageUrlStringValue("raw_img")),
-        "true_labels": tlc.CategoricalLabel("true_labels", LABEL_NAMES),
-        "predicted_labels": tlc.CategoricalLabel("predicted_labels", LABEL_NAMES),
-        "rendered_board": tlc.Schema(value=tlc.ImageUrlStringValue("rendered_board")),
-        "extracted_board": tlc.Schema(value=tlc.ImageUrlStringValue("extracted_board")),
-        "predicted_masks": tlc.Schema(value=tlc.ImageUrlStringValue("predicted_masks")),
-    }
-
+    # Set up metrics writer
     metrics_writer = tlc.MetricsTableWriter(
         run.url,
-        column_schemas=metrics_schemas,
+        column_schemas={
+            "raw_img": tlc.Schema(value=tlc.ImageUrlStringValue("raw_img")),
+            "true_labels": tlc.CategoricalLabel("true_labels", LABEL_NAMES),
+            "predicted_labels": tlc.CategoricalLabel("predicted_labels", LABEL_NAMES),
+            "rendered_board": tlc.Schema(value=tlc.ImageUrlStringValue("rendered_board")),
+            "extracted_board": tlc.Schema(value=tlc.ImageUrlStringValue("extracted_board")),
+            "predicted_masks": tlc.Schema(value=tlc.ImageUrlStringValue("predicted_masks")),
+        },
     )
 
     data_generator = get_test_generator(image_folder)
