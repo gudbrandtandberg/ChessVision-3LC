@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-from pathlib import Path
 from typing import Any
 
 import tlc
@@ -10,7 +9,7 @@ import torch
 import torch.nn as nn
 import torchvision.transforms.functional as F
 from torch import optim
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torchvision import transforms as T
 from tqdm import tqdm
 
@@ -18,7 +17,6 @@ from chessvision.board_extraction.loss_collector import LossCollector
 from chessvision.predict.classify_raw import load_extractor_checkpoint
 from chessvision.pytorch_unet.evaluate import evaluate
 from chessvision.pytorch_unet.unet import UNet
-from chessvision.pytorch_unet.utils.data_loading import BasicDataset
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
 from chessvision.utils import DATA_ROOT, best_extractor_weights, get_device
 
@@ -31,11 +29,6 @@ tlc.register_url_alias(
     "CHESSVISION_SEGMENTATION_PROJECT_ROOT",
     f"{tlc.Configuration.instance().project_root_url}/chessvision-segmentation",
 )
-
-dir_img = Path(DATASET_ROOT) / "images/"
-dir_mask = Path(DATASET_ROOT) / "masks/"
-assert dir_img.exists()
-assert dir_mask.exists()
 
 
 def save_extractor_checkpoint(model: torch.nn.Module, checkpoint_path: str, metadata: dict[str, Any]):
@@ -98,7 +91,6 @@ def train_model(
     epochs: int = 5,
     batch_size: int = 1,
     learning_rate: float = 1e-5,
-    val_percent: float = 0.1,
     save_checkpoint: bool = True,
     img_scale: float = 0.5,
     amp: bool = False,
@@ -113,15 +105,7 @@ def train_model(
     patience: int = 5,
     threshold: float = 0.3,
 ):
-    # 1. Create dataset
-    dataset = BasicDataset(dir_img.as_posix(), dir_mask.as_posix(), img_scale)
-
-    # 2. Split into train / validation partitions
-    n_val = int(len(dataset) * val_percent)
-    n_train = len(dataset) - n_val
-    train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(0))
-
-    # 2.1 Create 3LC datasets & training run
+    # Create 3LC datasets & training run
     parameters = {
         "epochs": epochs,
         "batch_size": batch_size,
@@ -132,32 +116,28 @@ def train_model(
     checkpoint_path = run.bulk_data_url / "checkpoint.pth"
     checkpoint_path.make_parents(True)
 
-    sample_structure = {
-        "image": tlc.PILImage("image"),
-        "mask": tlc.SegmentationPILImage("mask", classes={0: "background", 255: "chessboard"}),
-    }
+    tlc_train_dataset = (
+        tlc.Table.from_names(
+            "train-cleaned-filtered",
+            "chessboard-segmentation-train",
+            project_name,
+        )
+        .map(TransformSampleToModel())
+        .revision()
+    )
 
     tlc_val_dataset = (
-        tlc.Table.from_torch_dataset(
-            dataset=val_set,
-            dataset_name="chessboard-segmentation-val",
-            structure=sample_structure,
-            if_exists="reuse",
+        tlc.Table.from_names(
+            "table",
+            "chessboard-segmentation-val",
+            project_name,
         )
         .map(TransformSampleToModel())
-        .revision(None)
+        .revision()
     )
 
-    tlc_train_dataset = (
-        tlc.Table.from_torch_dataset(
-            dataset=train_set,
-            dataset_name="chessboard-segmentation-train",
-            structure=sample_structure,
-            if_exists="reuse",
-        )
-        .map(TransformSampleToModel())
-        .revision(table_name="train-cleaned-filtered")
-    )
+    n_train = len(tlc_train_dataset)
+    n_val = len(tlc_val_dataset)
 
     logging.info(f"Using training table {tlc_train_dataset.url}")
     logging.info(f"Using validation table {tlc_val_dataset.url}")
@@ -231,7 +211,6 @@ def train_model(
         "learning_rate": learning_rate,
         "amp": amp,
         "threshold": threshold,
-        # ... other relevant parameters
     }
 
     # Save initial model state
@@ -379,14 +358,6 @@ def get_args():
     )
     parser.add_argument("--load", "-f", type=str, default=False, help="Load model from a .pth file")
     parser.add_argument("--scale", "-s", type=float, default=0.5, help="Downscaling factor of the images")
-    parser.add_argument(
-        "--validation",
-        "-v",
-        dest="val",
-        type=float,
-        default=10.0,
-        help="Percent of the data that is used as validation (0-100)",
-    )
     parser.add_argument("--amp", action="store_true", default=False, help="Use mixed precision")
     parser.add_argument("--bilinear", action="store_true", default=False, help="Use bilinear upsampling")
     parser.add_argument("--classes", "-c", type=int, default=2, help="Number of classes")
@@ -430,7 +401,6 @@ if __name__ == "__main__":
         learning_rate=args.lr,
         device=device,
         img_scale=args.scale,
-        val_percent=args.val / 100,
         amp=args.amp,
         project_name=args.project_name,
         run_name=args.run_name,

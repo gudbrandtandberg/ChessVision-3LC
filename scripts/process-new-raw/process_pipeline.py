@@ -85,30 +85,45 @@ def download_raw_data(
 
     total_files = 0
     current_date = start_date
-    # TODO: use continuation token
     while current_date <= end_date:
         prefix = f"raw-uploads/{current_date.year}/{current_date.month}/{current_date.day}/"
 
-        # List objects with the prefix
-        response = s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix)
+        # Initialize pagination
+        continuation_token = None
+        while True:
+            # List objects with pagination
+            list_kwargs = {
+                "Bucket": bucket,
+                "Prefix": prefix,
+                "MaxKeys": 1000,  # AWS default is 1000, but being explicit
+            }
+            if continuation_token:
+                list_kwargs["ContinuationToken"] = continuation_token
 
-        if "Contents" not in response:
-            logger.info(f"No files found with prefix: {prefix}")
-            current_date += timedelta(days=1)
-            continue
+            response = s3_client.list_objects_v2(**list_kwargs)
 
-        files = response["Contents"]
-        logger.info(f"Found {len(files)} files with prefix: {prefix}")
+            if "Contents" not in response:
+                logger.info(f"No files found with prefix: {prefix}")
+                break
 
-        for obj in tqdm(files, desc=f"Processing {prefix}"):
-            key = obj["Key"]
-            file_name = output_folder / Path(key).name
+            files = response["Contents"]
+            logger.info(f"Processing {len(files)} files with prefix: {prefix}")
 
-            if not dry_run:
-                s3_client.download_file(bucket, key, str(file_name))
+            for obj in tqdm(files, desc=f"Processing {prefix}"):
+                key = obj["Key"]
+                file_name = output_folder / Path(key).name
+
+                if not dry_run:
+                    s3_client.download_file(bucket, key, str(file_name))
                 total_files += 1
-            else:
-                total_files += 1
+
+            # Check if there are more files to fetch
+            if not response.get("IsTruncated"):  # No more files
+                break
+
+            continuation_token = response.get("NextContinuationToken")
+            if not continuation_token:  # Shouldn't happen if IsTruncated is True
+                break
 
         current_date += timedelta(days=1)
 
