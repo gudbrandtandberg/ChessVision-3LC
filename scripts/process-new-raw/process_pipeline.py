@@ -284,26 +284,26 @@ def enrich_tlc_table(
             prob_images.append(probs_image)
 
         return {
-            "confidence": confidences,
-            "quadrangle_score": quadrangle_scores,
-            "mask_completeness": mask_completeness_scores,
-            "probability_distribution": prob_distribution_scores,
-            "extracted_boards": extracted_boards,
-            "rendered_boards": rendered_boards,
+            "extracted": extracted_boards,
+            "board": rendered_boards,
             "probs": prob_images,
-            "mask": masks,
+            "predicted_mask": masks,
+            "confidence": confidences,
+            "quad_score": quadrangle_scores,
+            "completeness": mask_completeness_scores,
+            "distribution": prob_distribution_scores,
         }
 
     # Define collector schemas
     custom_metrics_collector_schemas = {
         "confidence": tlc.Float("confidence"),
-        "quadrangle_score": tlc.Float("quadrangle_score"),
-        "mask_completeness": tlc.Float("mask_completeness"),
-        "probability_distribution": tlc.Float("probability_distribution"),
-        "extracted_boards": tlc.PILImage("extracted_boards"),
+        "quad_score": tlc.Float("quad_score"),
+        "completeness": tlc.Float("completeness"),
+        "distribution": tlc.Float("distribution"),
+        "extracted": tlc.PILImage("extracted"),
         "probs": tlc.PILImage("probs"),
-        "mask": tlc.SegmentationPILImage("mask", classes=segmentation_map),
-        "rendered_boards": tlc.PILImage("rendered_boards"),
+        "predicted_mask": tlc.SegmentationPILImage("predicted_mask", classes=segmentation_map),
+        "board": tlc.PILImage("board"),
     }
 
     # Collect metrics
