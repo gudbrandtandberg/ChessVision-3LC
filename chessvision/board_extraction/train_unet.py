@@ -395,6 +395,7 @@ def train_model(
             "learning_rate": learning_rate,
             "batch_size": batch_size,
             "epochs": epochs,
+            "final_epoch": epoch,
         }
     )
     return run, checkpoint_path

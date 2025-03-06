@@ -45,7 +45,7 @@ run_training() {
 }
 
 # Learning rates to try (multipliers of BASE_LR)
-LR_MULTIPLIERS=(1.0 10.0 100.0)
+LR_MULTIPLIERS=(1.0 10.0 100.0 1000.0)
 
 # Run sweep over learning rates and sample weights
 for multiplier in "${LR_MULTIPLIERS[@]}"; do
