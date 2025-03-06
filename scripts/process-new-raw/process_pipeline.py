@@ -19,6 +19,7 @@ Example usage:
 
 import argparse
 import logging
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -519,6 +520,7 @@ def run_pipeline(
     # Step 1: Download raw data
     if not skip_download:
         logger.info("=== Step 1: Downloading raw data ===")
+        download_start = time.time()
         download_folder = download_raw_data(
             bucket=bucket,
             start_date=start_date,
@@ -526,6 +528,8 @@ def run_pipeline(
             output_folder=output_folder,
             dry_run=dry_run,
         )
+        download_time = time.time() - download_start
+        results["download_time"] = download_time
         results["download_folder"] = download_folder
     else:
         logger.info("Skipping download step")
@@ -535,15 +539,19 @@ def run_pipeline(
         else:
             download_folder = output_folder
         results["download_folder"] = download_folder
+        results["download_time"] = 0
 
     # Step 2: Create 3LC table
     if not skip_create_table:
         logger.info("=== Step 2: Creating 3LC table ===")
+        table_start = time.time()
         table = create_tlc_table(
             input_folder=download_folder,
             project_name=project_name,
             dataset_name=dataset_name,
         )
+        table_time = time.time() - table_start
+        results["table_time"] = table_time
         results["table"] = table
     else:
         logger.info("Skipping table creation step")
@@ -554,19 +562,25 @@ def run_pipeline(
             project_name,
         )
         results["table"] = table
+        results["table_time"] = 0
 
     # Step 3: Enrich 3LC table
     if not skip_enrich:
         logger.info("=== Step 3: Enriching 3LC table ===")
+        enrich_start = time.time()
         run_url = enrich_tlc_table(
             table=table,
             run_name=run_name,
             threshold=threshold,
             embedding_layer=embedding_layer,
         )
+        enrich_time = time.time() - enrich_start
+        results["enrich_time"] = enrich_time
         results["run_url"] = run_url
     else:
         logger.info("Skipping enrichment step")
+        results["enrich_time"] = 0
+        results["run_url"] = None
 
     return results
 
