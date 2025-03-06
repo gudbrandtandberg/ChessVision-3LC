@@ -36,7 +36,7 @@ from tqdm import tqdm
 from chessvision.predict.classify_board import classify_board
 from chessvision.predict.classify_raw import load_board_extractor, load_classifier
 from chessvision.predict.extract_board import BoardExtractor
-from chessvision.test.test import save_svg
+from chessvision.test.test import chessboard_to_pil_image
 from chessvision.utils import BOARD_SIZE, DATA_ROOT, segmentation_map
 
 # Configure logging
@@ -289,18 +289,15 @@ def enrich_tlc_table(
             if result.board_image is not None:
                 pil_board = Image.fromarray(result.board_image)
                 extracted_boards.append(pil_board)
-                svg_url = Path((run.bulk_data_url / "rendered_board" / "board.png").create_unique().to_str())
-                svg_url.parent.mkdir(parents=True, exist_ok=True)
-
                 _, _, chessboard, _, _ = classify_board(result.board_image, sq_model, flip=False)
-                save_svg(chessboard, svg_url)
-                rendered_boards.append(Image.open(svg_url))
+                rendered_boards.append(chessboard_to_pil_image(chessboard))
 
             else:
                 black_image = Image.new("L", BOARD_SIZE, color=0)
                 rendered_boards.append(black_image)
                 extracted_boards.append(black_image)
 
+            # Add binary mask
             masks.append(Image.fromarray(result.binary_mask))
 
             # Process probabilities
@@ -351,7 +348,7 @@ def enrich_tlc_table(
             preprocess_fn=v2.Resize((256, 256), antialias=True),
         ),
         collect_aggregates=False,
-        dataloader_args={"batch_size": 2},
+        dataloader_args={"batch_size": 4},
     )
 
     # Reduce embeddings

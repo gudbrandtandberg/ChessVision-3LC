@@ -1,4 +1,5 @@
 import argparse
+import io
 import time
 from pathlib import Path
 
@@ -88,6 +89,12 @@ def get_test_generator(image_dir: Path):
 
     for i in range(len(test_imgs)):
         yield img_filenames[i], test_imgs[i]
+
+
+def chessboard_to_pil_image(chessboard: chess.Board) -> Image.Image:
+    svg = chess.svg.board(chessboard)
+    buffer = cairosvg.svg2png(bytestring=svg.encode("utf-8"))
+    return Image.open(io.BytesIO(buffer))
 
 
 def save_svg(chessboard: chess.Board, path: Path):
