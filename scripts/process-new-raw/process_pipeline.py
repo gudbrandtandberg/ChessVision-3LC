@@ -230,7 +230,7 @@ def enrich_tlc_table(
     # Load model and create board extractor
     logger.info("Loading board extraction model")
     model = load_board_extractor()
-    board_extractor = BoardExtractor(model)
+    sq_model = load_classifier()
 
     # Define preprocessing function
     def preprocess_image(sample):
@@ -251,62 +251,55 @@ def enrich_tlc_table(
     def custom_metrics_collector(batch, predictor_output):
         """Extract boards and collect metrics from batch of images."""
         logits = predictor_output.forward
-        probs = torch.sigmoid(logits.squeeze(1))
-        confidence = torch.abs(probs - 0.5) * 2
+        batch_size = logits.shape[0]
 
-        batch_size = confidence.shape[0]
-        confidences = []
-        quadrangle_scores = []
-        mask_completeness_scores = []
-        prob_distribution_scores = []
-        extracted_boards = []
-        logit_images = []
-        rendered_boards = []
+        # Initialize board extractor once
+        board_extractor = BoardExtractor()
 
         for i in range(batch_size):
-            # Original confidence calculation
-            k = int(confidence[i].numel() * 0.25)
-            top_k_confidence = torch.topk(confidence[i].flatten(), k).values
-            avg_confidence = float(top_k_confidence.mean())
-            confidences.append(avg_confidence)
-
             # Get original image
             orig_image = (batch[i].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
 
-            # Extract board
-            result = board_extractor.extract_board(
-                cv2.resize(orig_image, INPUT_SIZE, interpolation=cv2.INTER_AREA),
-                orig_image,
-                threshold=threshold,
-            )
+            # Process logits directly - no redundant inference!
+            result = board_extractor.process_logits(logits[i].squeeze().cpu().numpy(), orig_image, threshold=threshold)
+
+            # Initialize lists for metrics
+            rendered_boards = []
+            logit_images = []
+            confidences = []
+            quadrangle_scores = []
+            mask_completeness_scores = []
+            prob_distribution_scores = []
+            extracted_boards = []
 
             # Calculate additional metrics
             quad_score = quadrangle_regularity(result.quadrangle)
-            completeness_score = mask_completeness(result.probability_mask)
-            distribution_score = probability_distribution(result.probability_mask)
+            completeness_score = mask_completeness(result.probabilities)
+            distribution_score = probability_distribution(result.probabilities)
 
             quadrangle_scores.append(quad_score)
             mask_completeness_scores.append(completeness_score)
             prob_distribution_scores.append(distribution_score)
+            confidences.append(result.confidence)
 
             # Process results
             if result.board_image is not None:
                 pil_board = Image.fromarray(result.board_image)
                 extracted_boards.append(pil_board)
-                sq_model = load_classifier()
-                _, _, chessboard, _, _ = classify_board(result.board_image, sq_model, flip=False)
                 svg_url = Path((run.bulk_data_url / "rendered_board" / "board.png").create_unique().to_str())
                 svg_url.parent.mkdir(parents=True, exist_ok=True)
+
+                _, _, chessboard, _, _ = classify_board(result.board_image, sq_model, flip=False)
                 save_svg(chessboard, svg_url)
                 rendered_boards.append(Image.open(svg_url))
 
             else:
                 black_image = Image.new("L", BOARD_SIZE, color=0)
-                extracted_boards.append(black_image)
                 rendered_boards.append(black_image)
+                extracted_boards.append(black_image)
 
             # Process mask
-            logit_np = result.probability_mask.copy()
+            logit_np = result.probabilities.copy()  # Use probabilities for smoother visualization
             min_val, max_val = logit_np.min(), logit_np.max()
             if max_val > min_val:
                 logit_np = (logit_np - min_val) / (max_val - min_val)

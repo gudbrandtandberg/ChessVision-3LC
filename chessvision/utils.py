@@ -45,6 +45,8 @@ label_names = [
     "Unknown",
 ]
 
+segmentation_map = {0: "background", 255: "chessboard"}
+
 classifier_weights_dir = (Path(CVROOT) / "weights" / "classifier").as_posix()
 extractor_weights_dir = (Path(CVROOT) / "weights" / "extractor").as_posix()
 

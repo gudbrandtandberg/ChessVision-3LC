@@ -147,7 +147,7 @@ def run_tests(
             # Save the predicted mask
             predicted_mask_url = Path((run.bulk_data_url / "predicted_masks" / (filename[:-4] + ".png")).to_str())
             predicted_mask_url.parent.mkdir(parents=True, exist_ok=True)
-            Image.fromarray((mask * 255).astype(np.uint8)).save(predicted_mask_url)
+            Image.fromarray(mask).save(predicted_mask_url)
 
             if board_img is None:
                 print(f"Failed to classify {filename}")

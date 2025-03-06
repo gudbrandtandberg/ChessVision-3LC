@@ -6,7 +6,7 @@ import torch
 from chessvision.piece_classification.train_classifier import get_classifier_model
 from chessvision.piece_classification.train_classifier import load_checkpoint as load_classifier_checkpoint
 from chessvision.predict.classify_board import classify_board
-from chessvision.predict.extract_board import extract_board
+from chessvision.predict.extract_board import BoardExtractor, extract_board
 from chessvision.pytorch_unet.unet.unet_model import UNet
 from chessvision.utils import (
     INPUT_SIZE,
@@ -104,7 +104,11 @@ def classify_raw(
     ## Extract board using CNN model and contour approximation
     logger.debug("Extracting board from image")
     try:
-        board_img, mask = extract_board(comp_image, img, board_model, threshold=threshold)
+        extractor = BoardExtractor(board_model)
+        result = extractor.extract_board(comp_image, img, threshold=threshold)
+        board_img = result.board_image
+        # Return binary_mask for visualization, keep probabilities for metrics
+        mask = result.binary_mask
     except Exception as e:
         raise e
 

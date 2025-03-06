@@ -17,7 +17,9 @@ class ExtractionResult:
     """Results from board extraction process."""
 
     board_image: np.ndarray | None  # The extracted board image, or None if no board found
-    probability_mask: np.ndarray  # The probability mask from the model
+    logits: np.ndarray  # Raw model output
+    probabilities: np.ndarray  # Sigmoid(logits), values between 0-1
+    binary_mask: np.ndarray  # Thresholded mask, values are 0 or 255
     quadrangle: np.ndarray | None  # The detected quadrangle, or None if no board found
     confidence: float  # Confidence score for the extraction
 
@@ -37,38 +39,29 @@ class BoardExtractor:
         self.model = model
 
     def extract_board(
-        self,
-        image: np.ndarray,
-        orig_image: np.ndarray,
-        model: torch.nn.Module | None = None,
-        threshold: float = 0.3,
+        self, image: np.ndarray, orig_image: np.ndarray, model: torch.nn.Module | None = None, threshold: float = 0.3
     ) -> ExtractionResult:
-        """
-        Extract chessboard from an image using a segmentation model.
-
-        Args:
-            image: Preprocessed input image (256x256)
-            orig_image: Original input image (512x512)
-            model: PyTorch model for board segmentation (overrides the one set in constructor)
-            threshold: Probability threshold for mask binarization
-
-        Returns:
-            ExtractionResult containing the extracted board and metadata
-
-        Raises:
-            ValueError: If no model is provided either in constructor or as parameter
-        """
+        """Full pipeline: image -> board"""
         model_to_use = model or self.model
         if model_to_use is None:
             raise ValueError("No model provided for board extraction")
 
-        # Process image and get probability mask
+        # Get logits from model
         image_batch = self._preprocess_image(image)
-        probabilities = self._get_probabilities(model_to_use, image_batch)
+        with torch.no_grad():
+            logits = model_to_use(image_batch)[0].squeeze().cpu().numpy()
+
+        # Process logits to get board
+        return self.process_logits(logits, orig_image, threshold)
+
+    def process_logits(self, logits: np.ndarray, orig_image: np.ndarray, threshold: float = 0.3) -> ExtractionResult:
+        """Process raw logits to extract board"""
+        # Convert logits to probabilities
+        probabilities = torch.sigmoid(torch.tensor(logits)).numpy()
 
         # Create binary mask and find board
-        mask = self._fix_mask(probabilities, threshold)
-        quadrangle = self._find_quadrangle(mask)
+        binary_mask = self._fix_mask(probabilities, threshold)
+        quadrangle = self._find_quadrangle(binary_mask)
 
         # Calculate confidence score
         confidence = self._calculate_confidence(probabilities)
@@ -77,20 +70,22 @@ class BoardExtractor:
         if quadrangle is None:
             return ExtractionResult(
                 board_image=None,
-                probability_mask=probabilities,
+                logits=logits,
+                probabilities=probabilities,
+                binary_mask=binary_mask,
                 quadrangle=None,
                 confidence=confidence,
             )
 
-        # Scale approximation to input image size
+        # Scale and extract board
         scaled_quad = self._scale_approx(quadrangle, (orig_image.shape[0], orig_image.shape[1]))
-
-        # Extract and process board
         board = self._process_board(orig_image, scaled_quad, BOARD_SIZE)
 
         return ExtractionResult(
             board_image=board,
-            probability_mask=probabilities,
+            logits=logits,
+            probabilities=probabilities,
+            binary_mask=binary_mask,
             quadrangle=scaled_quad,
             confidence=confidence,
         )
@@ -109,22 +104,6 @@ class BoardExtractor:
         image_batch = torch.Tensor(np.array([image])) / 255
         image_batch = image_batch.permute(0, 3, 1, 2).to(self.device)
         return image_batch
-
-    def _get_probabilities(self, model: torch.nn.Module, image_batch: torch.Tensor) -> np.ndarray:
-        """Get probability mask from model, applying sigmoid if needed."""
-        with torch.no_grad():
-            logits = model(image_batch)
-
-        # Check if logits need sigmoid activation
-        sample_values = logits[0].flatten()[:10].cpu().numpy()
-        needs_sigmoid = np.any(sample_values < 0) or np.any(sample_values > 1)
-
-        if needs_sigmoid:
-            probabilities = torch.sigmoid(logits)
-        else:
-            probabilities = logits
-
-        return probabilities[0].squeeze().cpu().numpy()
 
     def _fix_mask(self, mask: np.ndarray, threshold: float = 0.3) -> np.ndarray:
         """Convert probability mask to binary mask."""
@@ -275,7 +254,7 @@ def extract_board(
     """
     extractor = BoardExtractor(model)
     result = extractor.extract_board(image, orig, threshold=threshold)
-    return result.board_image, result.probability_mask
+    return result.board_image, result.binary_mask
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ from chessvision.predict.classify_raw import load_extractor_checkpoint
 from chessvision.pytorch_unet.evaluate import evaluate
 from chessvision.pytorch_unet.unet import UNet
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
-from chessvision.utils import DATA_ROOT, best_extractor_weights, get_device
+from chessvision.utils import DATA_ROOT, best_extractor_weights, get_device, segmentation_map
 
 DATASET_ROOT = f"{DATA_ROOT}/board_extraction"
 tlc.register_url_alias(
@@ -298,7 +298,7 @@ def train_model(
             collectors = [
                 LossCollector(),
                 tlc.SegmentationMetricsCollector(
-                    label_map={0: "background", 255: "chessboard"},
+                    label_map=segmentation_map,
                     preprocess_fn=PrepareModelOutputsForLogging(),
                 ),
                 tlc.EmbeddingsMetricsCollector(layers=[52], reshape_strategy={52: "mean"}),
