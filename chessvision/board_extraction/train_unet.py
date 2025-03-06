@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import time
 from typing import Any
 
 import tlc
@@ -344,6 +345,9 @@ def train_model(
             "use_sample_weights": use_sample_weights,
             "train_table": tlc_train_dataset.url.apply_aliases().to_str(),
             "val_table": tlc_val_dataset.url.apply_aliases().to_str(),
+            "learning_rate": learning_rate,
+            "batch_size": batch_size,
+            "epochs": epochs,
         }
     )
     return run, checkpoint_path
@@ -351,16 +355,16 @@ def train_model(
 
 def get_args():
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
-    parser.add_argument("--epochs", "-e", metavar="E", type=int, default=5, help="Number of epochs")
-    parser.add_argument("--batch-size", "-b", dest="batch_size", metavar="B", type=int, default=1, help="Batch size")
+    parser.add_argument("--epochs", "-e", metavar="E", type=int, default=20, help="Number of epochs")
+    parser.add_argument("--batch-size", "-b", dest="batch_size", metavar="B", type=int, default=2, help="Batch size")
     parser.add_argument(
         "--learning-rate", "-l", metavar="LR", type=float, default=1e-5, help="Learning rate", dest="lr"
     )
     parser.add_argument("--load", "-f", type=str, default=False, help="Load model from a .pth file")
-    parser.add_argument("--scale", "-s", type=float, default=0.5, help="Downscaling factor of the images")
+    parser.add_argument("--scale", "-s", type=float, default=1.0, help="Downscaling factor of the images")
     parser.add_argument("--amp", action="store_true", default=False, help="Use mixed precision")
     parser.add_argument("--bilinear", action="store_true", default=False, help="Use bilinear upsampling")
-    parser.add_argument("--classes", "-c", type=int, default=2, help="Number of classes")
+    parser.add_argument("--classes", "-c", type=int, default=1, help="Number of classes")
     parser.add_argument("--run-tests", action="store_true", help="Run the test suite after training")
     parser.add_argument("--project-name", type=str, default="chessvision-segmentation", help="3LC project name")
     parser.add_argument("--run-name", type=str, default=None, help="3LC run name")
@@ -394,6 +398,7 @@ if __name__ == "__main__":
 
     model.to(device=device)
 
+    start = time.time()
     run, checkpoint_path = train_model(
         model=model,
         epochs=args.epochs,
@@ -410,6 +415,11 @@ if __name__ == "__main__":
         patience=5,
         threshold=args.threshold,
     )
+    stop = time.time()
+    minutes = int((stop - start) // 60)
+    seconds = int((stop - start) % 60)
+    print(f"Training completed in {minutes}m {seconds}s")
+
     if args.run_tests:
         from chessvision.test import run_tests
 
