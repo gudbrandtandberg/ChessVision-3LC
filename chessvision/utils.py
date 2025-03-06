@@ -1,6 +1,9 @@
 import os
 from pathlib import Path
 
+import numpy as np
+from PIL import Image
+
 CVROOT = os.getenv("CVROOT", Path(__file__).parent.parent.as_posix())
 
 DATA_ROOT = (Path(CVROOT) / "data").as_posix()
@@ -74,3 +77,16 @@ def get_device():
         device = torch.device("cpu")
 
     return device
+
+
+BLACK_BOARD = Image.fromarray(np.zeros(INPUT_SIZE).astype(np.uint8))
+BLACK_CROP = Image.fromarray(np.zeros(PIECE_SIZE).astype(np.uint8))
+
+BLACK_BOARD_URL = DATA_ROOT + "/board_extraction/black_board.png"
+BLACK_CROP_URL = DATA_ROOT + "/squares/black_square.png"
+
+if not Path(BLACK_BOARD_URL).exists():
+    BLACK_BOARD.save(BLACK_BOARD_URL)
+
+if not Path(BLACK_CROP_URL).exists():
+    BLACK_CROP.save(BLACK_CROP_URL)

@@ -22,7 +22,7 @@ dir_img = Path(DATASET_ROOT) / "images/"
 dir_mask = Path(DATASET_ROOT) / "masks/"
 assert dir_img.exists()
 assert dir_mask.exists()
-scale = 0.5
+scale = 1.0
 
 
 def create_tables():
