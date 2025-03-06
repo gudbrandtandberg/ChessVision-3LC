@@ -35,33 +35,27 @@ tlc.register_url_alias(
 )
 
 
+def worker_init_fn(worker_id: int):
+    """Initialize worker with a unique seed."""
+    worker_seed = 42 + worker_id  # Base seed + worker offset
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
+
+
 def set_deterministic_mode(seed=42):
-    """Set seeds and configurations to make training deterministic."""
-    # Set Python, NumPy, and PyTorch seeds
+    """Set seeds and configurations for deterministic training."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    # For CUDA operations
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)  # For multi-GPU
-
-        # These settings are needed for CUDA determinism
-        # but may impact performance
+        torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    # For some PyTorch operations
     os.environ["PYTHONHASHSEED"] = str(seed)
-
-    # For DataLoader workers
-    def seed_worker(worker_id):
-        worker_seed = seed + worker_id
-        np.random.seed(worker_seed)
-        random.seed(worker_seed)
-
-    return seed_worker
 
 
 def save_extractor_checkpoint(model: torch.nn.Module, checkpoint_path: str, metadata: dict[str, Any]):
@@ -142,7 +136,8 @@ def train_model(
     deterministic: bool = False,
 ):
     if deterministic:
-        seed_worker = set_deterministic_mode(seed)
+        set_deterministic_mode(seed)
+        seed_worker = worker_init_fn
         g = torch.Generator()
         g.manual_seed(seed)
     else:
@@ -167,7 +162,7 @@ def train_model(
 
     tlc_train_dataset = (
         tlc.Table.from_names(
-            table_name="fix-bad-sample",
+            table_name="train-cleaned-filtered",
             dataset_name="chessboard-segmentation-train",
             project_name=project_name,
         )
