@@ -160,41 +160,19 @@ def create_tlc_table(
     logger.info(f"Table name: {table_name}")
     logger.info(f"Project: {project_name}, Dataset: {dataset_name}")
 
-    # Create table writer
-    table_writer = tlc.TableWriter(
+    table = tlc.Table.from_image_folder(
+        input_folder,
+        include_label_column=False,
+        extensions=("JPG", "jpg"),
         table_name=table_name,
         dataset_name=dataset_name,
         project_name=project_name,
-        column_schemas={
-            "image": tlc.PILImage("image"),
-        },
         if_exists="overwrite",
+        extra_columns={
+            "mask": tlc.SegmentationPILImage("mask", classes=segmentation_map),
+        },
     )
 
-    # Add images to table
-    image_count = 0
-    image_files = list(input_folder.glob("*.JPG"))
-    logger.info(f"Found {len(image_files)} JPG files in folder")
-
-    for file in tqdm(image_files, desc="Adding images to table"):
-        if not file.is_file():
-            continue
-
-        try:
-            pil_img = Image.open(file)
-            table_writer.add_row(
-                {
-                    "image": pil_img,
-                }
-            )
-            image_count += 1
-        except Exception as e:
-            logger.error(f"Error processing {file}: {e}")
-
-    logger.info(f"Added {image_count} images to table")
-
-    # Finalize table
-    table = table_writer.finalize()
     logger.info(f"Table created: {table.url}")
 
     return table
