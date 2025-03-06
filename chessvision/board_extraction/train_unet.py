@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import random
 import time
 from typing import Any
 
+import numpy as np
 import tlc
 import torch
 import torch.nn as nn
@@ -30,6 +33,35 @@ tlc.register_url_alias(
     "CHESSVISION_SEGMENTATION_PROJECT_ROOT",
     f"{tlc.Configuration.instance().project_root_url}/chessvision-segmentation",
 )
+
+
+def set_deterministic_mode(seed=42):
+    """Set seeds and configurations to make training deterministic."""
+    # Set Python, NumPy, and PyTorch seeds
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    # For CUDA operations
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)  # For multi-GPU
+
+        # These settings are needed for CUDA determinism
+        # but may impact performance
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+    # For some PyTorch operations
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    # For DataLoader workers
+    def seed_worker(worker_id):
+        worker_seed = seed + worker_id
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+
+    return seed_worker
 
 
 def save_extractor_checkpoint(model: torch.nn.Module, checkpoint_path: str, metadata: dict[str, Any]):
@@ -100,18 +132,34 @@ def train_model(
     gradient_clipping: float = 1.0,
     project_name: str = "chessvision-segmentation",
     run_name: str | None = None,
+    run_description: str | None = None,
     use_sample_weights: bool = False,
     validations_per_epoch: int = 2,
     collection_frequency: int = 5,
     patience: int = 5,
     threshold: float = 0.3,
+    seed: int = 42,
+    deterministic: bool = False,
 ):
+    if deterministic:
+        seed_worker = set_deterministic_mode(seed)
+        g = torch.Generator()
+        g.manual_seed(seed)
+    else:
+        seed_worker = None
+        g = None
+
     # Create 3LC datasets & training run
     parameters = {
         "epochs": epochs,
         "batch_size": batch_size,
     }
-    run = tlc.init(project_name, run_name, parameters=parameters)
+    run = tlc.init(
+        project_name,
+        run_name,
+        parameters=parameters,
+        description=run_description,
+    )
 
     # Write checkpoints in the run directory
     checkpoint_path = run.bulk_data_url / "checkpoint.pth"
@@ -119,9 +167,9 @@ def train_model(
 
     tlc_train_dataset = (
         tlc.Table.from_names(
-            "train-cleaned-filtered",
-            "chessboard-segmentation-train",
-            project_name,
+            table_name="fix-bad-sample",
+            dataset_name="chessboard-segmentation-train",
+            project_name=project_name,
         )
         .map(TransformSampleToModel())
         .revision()
@@ -152,6 +200,8 @@ def train_model(
         num_workers=4,
         pin_memory=True,
         persistent_workers=True,
+        worker_init_fn=seed_worker,
+        generator=g,
     )
     val_loader = DataLoader(
         tlc_val_dataset,
@@ -159,6 +209,8 @@ def train_model(
         drop_last=True,
         batch_size=batch_size,
         pin_memory=True,
+        worker_init_fn=seed_worker,
+        generator=g,
     )
 
     logging.info(
@@ -368,6 +420,7 @@ def get_args():
     parser.add_argument("--run-tests", action="store_true", help="Run the test suite after training")
     parser.add_argument("--project-name", type=str, default="chessvision-segmentation", help="3LC project name")
     parser.add_argument("--run-name", type=str, default=None, help="3LC run name")
+    parser.add_argument("--run-description", type=str, default=None, help="3LC run description")
     parser.add_argument("--threshold", type=float, default=0.3, help="Threshold for binarizing the output masks")
     parser.add_argument("--use-sample-weights", action="store_true", help="Use a weighted sampler")
 
@@ -409,11 +462,14 @@ if __name__ == "__main__":
         amp=args.amp,
         project_name=args.project_name,
         run_name=args.run_name,
+        run_description=args.run_description,
         use_sample_weights=args.use_sample_weights,
         validations_per_epoch=2,
         collection_frequency=5,
         patience=5,
         threshold=args.threshold,
+        seed=args.seed,
+        deterministic=args.deterministic,
     )
     stop = time.time()
     minutes = int((stop - start) // 60)
