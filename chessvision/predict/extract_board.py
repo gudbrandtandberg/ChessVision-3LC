@@ -21,7 +21,6 @@ class ExtractionResult:
     probabilities: np.ndarray  # Sigmoid(logits), values between 0-1
     binary_mask: np.ndarray  # Thresholded mask, values are 0 or 255
     quadrangle: np.ndarray | None  # The detected quadrangle, or None if no board found
-    confidence: float  # Confidence score for the extraction
 
 
 class BoardExtractor:
@@ -63,9 +62,6 @@ class BoardExtractor:
         binary_mask = self._fix_mask(probabilities, threshold)
         quadrangle = self._find_quadrangle(binary_mask)
 
-        # Calculate confidence score
-        confidence = self._calculate_confidence(probabilities)
-
         # If no board found, return early
         if quadrangle is None:
             return ExtractionResult(
@@ -74,7 +70,6 @@ class BoardExtractor:
                 probabilities=probabilities,
                 binary_mask=binary_mask,
                 quadrangle=None,
-                confidence=confidence,
             )
 
         # Scale and extract board
@@ -87,17 +82,7 @@ class BoardExtractor:
             probabilities=probabilities,
             binary_mask=binary_mask,
             quadrangle=scaled_quad,
-            confidence=confidence,
         )
-
-    def _calculate_confidence(self, probabilities: np.ndarray) -> float:
-        """Calculate confidence score for the extraction."""
-        # Use the top 25% most confident predictions
-        flat_probs = probabilities.flatten()
-        k = int(flat_probs.size * 0.25)
-        sorted_probs = np.sort(flat_probs)[-k:]
-        confidence = np.mean(np.abs(sorted_probs - 0.5)) * 2
-        return float(confidence)
 
     def _preprocess_image(self, image: np.ndarray) -> torch.Tensor:
         """Preprocess image for model input."""

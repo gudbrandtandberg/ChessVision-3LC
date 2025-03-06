@@ -276,11 +276,12 @@ def enrich_tlc_table(
             quad_score = quadrangle_regularity(result.quadrangle)
             completeness_score = mask_completeness(result.probabilities)
             distribution_score = probability_distribution(result.probabilities)
+            confidence_score = probability_confidence(result.probabilities)
 
             quadrangle_scores.append(quad_score)
             mask_completeness_scores.append(completeness_score)
             prob_distribution_scores.append(distribution_score)
-            confidences.append(result.confidence)
+            confidences.append(confidence_score)
 
             # Process results
             if result.board_image is not None:
@@ -460,6 +461,16 @@ def quadrangle_regularity(quadrangle):
 
     # Combine metrics (lower is better, so subtract from 1)
     return 1.0 - (side_variance * 0.5 + angle_variance * 0.5)
+
+
+def probability_confidence(probabilities: np.ndarray) -> float:
+    """Calculate confidence score for the extraction."""
+    # Use the top 25% most confident predictions
+    flat_probs = probabilities.flatten()
+    k = int(flat_probs.size * 0.25)
+    sorted_probs = np.sort(flat_probs)[-k:]
+    confidence = np.mean(np.abs(sorted_probs - 0.5)) * 2
+    return float(confidence)
 
 
 def run_pipeline(
