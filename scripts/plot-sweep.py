@@ -5,10 +5,19 @@ import tlc
 
 project_name = "chessvision-segmentation"
 
+run_names = [
+    "messy-fader",
+    "partial-producer",
+    "calm-equity",
+    "amiable-buck",
+    "deafening-lens",
+    "investor-tanager",
+]
 
-def collect_sweep_data(runs: list[str]) -> dict[str, list[float]]:
+
+def collect_sweep_data(run_names: list[str]) -> dict[str, list[float]]:
     data = defaultdict(list)
-    for run_name in runs:
+    for run_name in run_names:
         run = tlc.Run.from_url(tlc.Url.create_run_url(run_name, project_name))
         parameters = run.constants["parameters"]
         data["Learning Rate"].append(parameters["learning_rate"])
@@ -18,16 +27,7 @@ def collect_sweep_data(runs: list[str]) -> dict[str, list[float]]:
     return data
 
 
-runs = [
-    "messy-fader",
-    "partial-producer",
-    "calm-equity",
-    "amiable-buck",
-    "deafening-lens",
-    "investor-tanager",
-]
-
-data = collect_sweep_data(runs)
+data = collect_sweep_data(run_names)
 
 # Create parallel coordinates plot
 fig = go.Figure(
