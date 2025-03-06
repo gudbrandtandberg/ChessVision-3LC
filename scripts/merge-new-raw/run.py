@@ -1,14 +1,27 @@
 import tlc
 
 new_table = tlc.Table.from_names(
-    "raw",
+    "assign-three-masks",
     "chessvision-new-raw",
     "chessvision-new-raw",
 )
+
+filtered_table = tlc.FilteredTable(
+    url=tlc.Url.create_table_url(f"filtered-{new_table.name}", new_table.dataset_name, new_table.project_name),
+    input_table_url=new_table,
+    filter_criterion=tlc.BoolFilterCriterion("mask", True),
+)
+filtered_table.write_to_url()
+
 orig_table = tlc.Table.from_names(
     "fix-bad-sample",
     "chessboard-segmentation-train",
     "chessvision-segmentation",
 )
 
-new_table = tlc.Table.join_tables([orig_table, new_table], table_name=f"joined-{new_table.name}")
+joined_table = tlc.Table.join_tables(
+    [orig_table, filtered_table],
+    table_name=f"joined-{filtered_table.name}",
+)
+
+print(joined_table)
