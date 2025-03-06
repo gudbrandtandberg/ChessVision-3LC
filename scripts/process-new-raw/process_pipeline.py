@@ -304,11 +304,7 @@ def enrich_tlc_table(
             masks.append(Image.fromarray(result.binary_mask))
 
             # Process probabilities
-            probs_np = result.probabilities.copy()  # Use probabilities for smoother visualization
-            # min_val, max_val = probs_np.min(), probs_np.max()
-            # if max_val > min_val:
-            #     probs_np = (probs_np - min_val) / (max_val - min_val)
-            probs_np = (probs_np * 255).astype(np.uint8)
+            probs_np = (result.probabilities * 255).astype(np.uint8)
             probs_image = Image.fromarray(probs_np, mode="L")
             prob_images.append(probs_image)
 
