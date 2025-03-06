@@ -423,6 +423,8 @@ def get_args():
     parser.add_argument("--run-description", type=str, default=None, help="3LC run description")
     parser.add_argument("--threshold", type=float, default=0.3, help="Threshold for binarizing the output masks")
     parser.add_argument("--use-sample-weights", action="store_true", help="Use a weighted sampler")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser.add_argument("--deterministic", action="store_true", help="Enable deterministic training")
 
     return parser.parse_args()
 

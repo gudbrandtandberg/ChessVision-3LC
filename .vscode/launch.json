@@ -41,7 +41,10 @@
                 "--learning-rate", "0.0000001",
                 "--amp",
                 "--run-tests",
-                // "--use-sample-weights",
+                "--run-description", "Use sample weights",
+                "--use-sample-weights",
+                "--seed", "42",
+                "--deterministic",
             ]
         },
         {
