@@ -32,8 +32,10 @@ import torchvision.transforms.v2 as v2
 from PIL import Image
 from tqdm import tqdm
 
-from chessvision.predict.classify_raw import load_board_extractor
+from chessvision.predict.classify_board import classify_board
+from chessvision.predict.classify_raw import load_board_extractor, load_classifier
 from chessvision.predict.extract_board import BoardExtractor
+from chessvision.test.test import save_svg
 from chessvision.utils import BOARD_SIZE, DATA_ROOT, INPUT_SIZE
 
 # Configure logging
@@ -259,6 +261,7 @@ def enrich_tlc_table(
         prob_distribution_scores = []
         extracted_boards = []
         logit_images = []
+        rendered_boards = []
 
         for i in range(batch_size):
             # Original confidence calculation
@@ -290,9 +293,17 @@ def enrich_tlc_table(
             if result.board_image is not None:
                 pil_board = Image.fromarray(result.board_image)
                 extracted_boards.append(pil_board)
+                sq_model = load_classifier()
+                _, _, chessboard, _, _ = classify_board(result.board_image, sq_model, flip=False)
+                svg_url = Path((run.bulk_data_url / "rendered_board" / "board.png").create_unique().to_str())
+                svg_url.parent.mkdir(parents=True, exist_ok=True)
+                save_svg(chessboard, svg_url)
+                rendered_boards.append(Image.open(svg_url))
+
             else:
                 black_image = Image.new("L", BOARD_SIZE, color=0)
                 extracted_boards.append(black_image)
+                rendered_boards.append(black_image)
 
             # Process mask
             logit_np = result.probability_mask.copy()
@@ -309,6 +320,7 @@ def enrich_tlc_table(
             "mask_completeness": mask_completeness_scores,
             "probability_distribution": prob_distribution_scores,
             "extracted_boards": extracted_boards,
+            "rendered_boards": rendered_boards,
             "logit_images": logit_images,
         }
 
@@ -320,6 +332,7 @@ def enrich_tlc_table(
         "probability_distribution": tlc.Float("probability_distribution"),
         "extracted_boards": tlc.PILImage("extracted_boards"),
         "logit_images": tlc.PILImage("logit_images"),
+        "rendered_boards": tlc.PILImage("rendered_boards"),
     }
 
     # Collect metrics
