@@ -5,7 +5,6 @@ BASE_LR=0.0000001
 EPOCHS=20
 BATCH_SIZE=2
 PROJECT_NAME="chessvision-segmentation"
-THRESHOLD=0.3
 
 source .venv-dev/Scripts/activate
 
@@ -13,15 +12,17 @@ source .venv-dev/Scripts/activate
 run_training() {
     local lr=$1
     local use_weights=$2
+    local threshold=$3
     local seed=42  # Fixed seed for deterministic training
     
     # Construct description from parameters
     local weights_desc=$([ "$use_weights" = true ] && echo "with_weights" || echo "no_weights")
-    local description="lr_${lr}_${weights_desc}"
+    local description="lr_${lr}_${weights_desc}_thresh_${threshold}"
     
     echo "Starting training with:"
     echo "  Learning rate: $lr"
     echo "  Sample weights: $use_weights"
+    echo "  Threshold: $threshold"
     echo "  Description: $description"
     
     # Build weights flag
@@ -32,7 +33,7 @@ run_training() {
         --epochs "$EPOCHS" \
         --batch-size "$BATCH_SIZE" \
         --project-name "$PROJECT_NAME" \
-        --threshold "$THRESHOLD" \
+        --threshold "$threshold" \
         --seed "$seed" \
         --deterministic \
         --amp \
@@ -44,18 +45,21 @@ run_training() {
     echo "----------------------------------------"
 }
 
-# Learning rates to try (multipliers of BASE_LR)
+# Parameters to sweep
 LR_MULTIPLIERS=(1.0 10.0 100.0 1000.0)
+THRESHOLDS=(0.3 0.5 0.7)
 
-# Run sweep over learning rates and sample weights
+# Run full sweep over learning rates, sample weights, and thresholds
 for multiplier in "${LR_MULTIPLIERS[@]}"; do
     lr=$(awk "BEGIN {print $BASE_LR * $multiplier}")
     
-    # Without sample weights
-    run_training "$lr" false
-    
-    # With sample weights
-    run_training "$lr" true
+    for threshold in "${THRESHOLDS[@]}"; do
+        # Without sample weights
+        run_training "$lr" false "$threshold"
+        
+        # With sample weights
+        run_training "$lr" true "$threshold"
+    done
 done
 
 echo "All training jobs completed!"
