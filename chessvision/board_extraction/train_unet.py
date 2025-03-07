@@ -282,11 +282,18 @@ def train_model(
         "learning_rate": learning_rate,
         "amp": amp,
         "threshold": threshold,
+        "run_name": run.name,
     }
 
     # Save initial model state
     save_extractor_checkpoint(
-        model, checkpoint_path, {"epoch": 0, "best_val_score": float("-inf"), "training_config": training_config}
+        model,
+        checkpoint_path,
+        metadata={
+            "best_val_score": float("-inf"),
+            "training_config": training_config,
+            "epoch": 0,
+        },
     )
 
     # 5. Begin training
@@ -351,7 +358,8 @@ def train_model(
                 checkpoint_path,
                 metadata={
                     "best_val_score": best_val_score,
-                    "run_name": run.name,
+                    "epoch": epoch,
+                    "training_config": training_config,
                 },
             )
             logging.info(f"Checkpoint {epoch} saved! (Dice score: {best_val_score}, run: {run.name})")
@@ -371,7 +379,7 @@ def train_model(
                 LossCollector(),
                 tlc.SegmentationMetricsCollector(
                     label_map=segmentation_map,
-                    preprocess_fn=PrepareModelOutputsForLogging(),
+                    preprocess_fn=PrepareModelOutputsForLogging(threshold=threshold),
                 ),
                 tlc.EmbeddingsMetricsCollector(layers=[52], reshape_strategy={52: "mean"}),
             ]
