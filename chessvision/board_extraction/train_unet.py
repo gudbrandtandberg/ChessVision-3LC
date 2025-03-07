@@ -168,6 +168,9 @@ def train_model(
     parameters = {
         "epochs": epochs,
         "batch_size": batch_size,
+        "sweep_id": sweep_id or 0,
+        "use_sample_weights": use_sample_weights,
+        "learning_rate": learning_rate,
     }
     run = tlc.init(
         project_name,
@@ -287,6 +290,7 @@ def train_model(
     )
 
     # 5. Begin training
+    start_time = time.time()  # Start timing at beginning of training
     for epoch in range(1, epochs + 1):
         model.train()
         epoch_loss = 0
@@ -397,7 +401,15 @@ def train_model(
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    logging.info("Training completed. Reducing embeddings to 2 dimensions using pacmap...")
+    # After training completes
+    stop_time = time.time()
+    training_minutes = int((stop_time - start_time) // 60)
+    training_seconds = int((stop_time - start_time) % 60)
+    training_time = f"{training_minutes}m {training_seconds}s"
+
+    logging.info(f"Training completed in {training_time}")
+
+    logging.info("Reducing embeddings to 2 dimensions using pacmap...")
     run.reduce_embeddings_by_foreign_table_url(
         tlc_train_dataset.url,
         delete_source_tables=True,
@@ -409,14 +421,10 @@ def train_model(
         {
             "best_val_score": best_val_score,
             "model_path": checkpoint_path.apply_aliases().to_str(),
-            "use_sample_weights": use_sample_weights,
             "train_table": tlc_train_dataset.url.apply_aliases().to_str(),
             "val_table": tlc_val_dataset.url.apply_aliases().to_str(),
-            "learning_rate": learning_rate,
-            "batch_size": batch_size,
-            "epochs": epochs,
             "final_epoch": epoch,
-            "sweep_id": sweep_id or 0,
+            "training_time": training_time,
         }
     )
     return run, checkpoint_path
@@ -468,7 +476,7 @@ if __name__ == "__main__":
     logging.info(f"Using device {device}")
 
     model = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
-    model = model.to(memory_format=torch.channels_last)
+    model.to(device=device)
 
     logging.info(
         f"Network:\n"
@@ -481,9 +489,6 @@ if __name__ == "__main__":
     if args.load:
         load_extractor_checkpoint(model, best_extractor_weights)
 
-    model.to(device=device)
-
-    start = time.time()
     run, checkpoint_path = train_model(
         model=model,
         epochs=args.epochs,
@@ -508,11 +513,8 @@ if __name__ == "__main__":
         train_dataset_name=args.train_dataset,
         val_dataset_name=args.val_dataset,
     )
-    stop = time.time()
-    minutes = int((stop - start) // 60)
-    seconds = int((stop - start) % 60)
-    print(f"Training completed in {minutes}m {seconds}s")
 
+    # Remove timing code from main
     if args.run_tests:
         from chessvision.test import run_tests
 
