@@ -154,7 +154,7 @@ def train_model(
     val_table_name: str = "table",
 ):
     if deterministic:
-        set_deterministic_mode(seed)
+        # Only set up worker seeds, main process already deterministic
         seed_worker = worker_init_fn
         g = torch.Generator()
         g.manual_seed(seed)
@@ -451,6 +451,10 @@ if __name__ == "__main__":
     args = get_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    # Set deterministic mode BEFORE creating model
+    if args.deterministic:
+        set_deterministic_mode(args.seed)
 
     device = get_device()
     logging.info(f"Using device {device}")
