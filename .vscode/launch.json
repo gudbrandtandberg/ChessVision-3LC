@@ -38,10 +38,10 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
-                "--learning-rate", "0.0000001",
+                "--learning-rate", "0.000001",
                 "--amp",
                 "--run-tests",
-                "--run-description", "Use sample weights",
+                "--run-description", "",
                 "--use-sample-weights",
                 "--seed", "42",
                 "--deterministic",
@@ -55,25 +55,8 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
-                // "--create-table", 
-                "--compute-metrics",
                 "--project-name", "chessvision-testing",
-                "--threshold", "0.3",
-                // "--dataset-name", "testing-top-k",
-                // "--table-name", "17mai",
-                // "--image-folder=C:/Project/ChessVision-3LC/output"
-            ]
-        },
-        {
-            "name": "Python: Download Images",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/download_raw_data.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--bucket", "chessvision-bucket",
-                "--start_date", "2024-05-17",
-                "--output_folder", "${workspaceFolder}/output"
+                "--threshold", "0.5",
             ]
         },
         {
@@ -88,7 +71,8 @@
             ],
             "env": {
                 "FLASK_ENV": "development",
-                "FLASK_DEBUG": "1"
+                "FLASK_DEBUG": "1",
+                "FLASK_USE_RELOADER": "False"
             }
         },
         {
@@ -104,7 +88,17 @@
             "env": {
                 "FLASK_ENV": "development",
                 "FLASK_DEBUG": "1",
+                "FLASK_USE_RELOADER": "False",
                 "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+    ],
+    "compounds": [
+        {
+            "name": "Full Stack (Compound)",
+            "configurations": ["Run Web Server", "Run Compute Endpoint"],
+            "env": {
+                "FLASK_USE_RELOADER": "False"
             }
         }
     ]
