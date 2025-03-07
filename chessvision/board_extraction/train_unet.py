@@ -152,6 +152,8 @@ def train_model(
     sweep_id: int | None = None,
     train_table_name: str = "table",
     val_table_name: str = "table",
+    train_dataset_name: str = "chessboard-segmentation-train",
+    val_dataset_name: str = "chessboard-segmentation-val",
 ):
     if deterministic:
         # Only set up worker seeds, main process already deterministic
@@ -181,7 +183,7 @@ def train_model(
     tlc_train_dataset = (
         tlc.Table.from_names(
             table_name=train_table_name,
-            dataset_name="chessboard-segmentation-train",
+            dataset_name=train_dataset_name,
             project_name=project_name,
         )
         .map(TransformSampleToModel())
@@ -191,7 +193,7 @@ def train_model(
     tlc_val_dataset = (
         tlc.Table.from_names(
             table_name=val_table_name,
-            dataset_name="chessboard-segmentation-val",
+            dataset_name=val_dataset_name,
             project_name=project_name,
         )
         .map(TransformSampleToModel())
@@ -443,6 +445,12 @@ def get_args():
     parser.add_argument("--sweep-id", type=int, default=None, help="3LC sweep ID")
     parser.add_argument("--train-table", type=str, default="table", help="Name of training table")
     parser.add_argument("--val-table", type=str, default="table", help="Name of validation table")
+    parser.add_argument(
+        "--train-dataset", type=str, default="chessboard-segmentation-train", help="Name of training dataset"
+    )
+    parser.add_argument(
+        "--val-dataset", type=str, default="chessboard-segmentation-val", help="Name of validation dataset"
+    )
 
     return parser.parse_args()
 
@@ -497,6 +505,8 @@ if __name__ == "__main__":
         sweep_id=args.sweep_id,
         train_table_name=args.train_table,
         val_table_name=args.val_table,
+        train_dataset_name=args.train_dataset,
+        val_dataset_name=args.val_dataset,
     )
     stop = time.time()
     minutes = int((stop - start) // 60)

@@ -18,7 +18,9 @@ RUN_TESTS=true
 
 # Project settings
 PROJECT_NAME="chessvision-segmentation"
-TRAIN_TABLE_NAME="loss-weights" # joined-filtered-add-17-masks
+TRAIN_DATASET_NAME="chessboard-segmentation-train"
+VAL_DATASET_NAME="chessboard-segmentation-val"
+TRAIN_TABLE_NAME="table"
 VAL_TABLE_NAME="table"
 RUN_DESCRIPTION=""
 SWEEP_ID=0
@@ -64,6 +66,8 @@ python chessvision/board_extraction/train_unet.py \
     --run-description "$RUN_DESCRIPTION" \
     --sweep-id "$SWEEP_ID" \
     --train-table "$TRAIN_TABLE_NAME" \
-    --val-table "$VAL_TABLE_NAME"
+    --val-table "$VAL_TABLE_NAME" \
+    --train-dataset "$TRAIN_DATASET_NAME" \
+    --val-dataset "$VAL_DATASET_NAME"
 
 echo "Training completed!"
