@@ -5,6 +5,9 @@ BASE_LR=0.0000001
 EPOCHS=20
 BATCH_SIZE=2
 PROJECT_NAME="chessvision-segmentation"
+SWEEP_ID=1
+TRAIN_TABLE_NAME="add-17-samples"
+VAL_TABLE_NAME="table"
 
 source .venv-dev/Scripts/activate
 
@@ -39,7 +42,10 @@ run_training() {
         --amp \
         --run-tests \
         $weights_flag \
-        --run-description "$description"
+        --run-description "$description" \
+        --sweep-id "$SWEEP_ID" \
+        --train-table "$TRAIN_TABLE_NAME" \
+        --val-table "$VAL_TABLE_NAME"
     
     echo "Training completed for $description"
     echo "----------------------------------------"

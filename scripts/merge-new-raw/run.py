@@ -1,7 +1,7 @@
 import tlc
 
 new_table = tlc.Table.from_names(
-    "assign-three-masks",
+    "add-17-masks",
     "chessvision-new-raw",
     "chessvision-new-raw",
 )
@@ -14,7 +14,7 @@ filtered_table = tlc.FilteredTable(
 filtered_table.write_to_url()
 
 orig_table = tlc.Table.from_names(
-    "fix-bad-sample",
+    "train-cleaned-filtered",
     "chessboard-segmentation-train",
     "chessvision-segmentation",
 )

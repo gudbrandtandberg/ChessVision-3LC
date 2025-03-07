@@ -67,9 +67,24 @@ class TransformSampleToModel:
     """Convert a dict of PIL images to a dict of tensors of the right type."""
 
     def __call__(self, sample: dict[str, Any]) -> dict[str, torch.Tensor]:
+        img = sample["image"]
+        mask = sample["mask"]
+
+        # Ensure consistent size
+        if img.size != (256, 256):
+            img = T.Resize((256, 256))(img)
+
+        # Ensure mask is single channel
+        if mask.mode != "L":
+            mask = mask.convert("L")  # Convert to grayscale
+
+        # Convert to tensors
+        img_tensor = T.ToTensor()(img)
+        mask_tensor = T.ToTensor()(mask).long()
+
         return {
-            "image": T.ToTensor()(sample["image"]),
-            "mask": T.ToTensor()(sample["mask"]).long(),
+            "image": img_tensor,
+            "mask": mask_tensor,
         }
 
 
@@ -134,6 +149,9 @@ def train_model(
     threshold: float = 0.3,
     seed: int = 42,
     deterministic: bool = False,
+    sweep_id: int | None = None,
+    train_table_name: str = "table",
+    val_table_name: str = "table",
 ):
     if deterministic:
         set_deterministic_mode(seed)
@@ -162,7 +180,7 @@ def train_model(
 
     tlc_train_dataset = (
         tlc.Table.from_names(
-            table_name="train-cleaned-filtered",
+            table_name=train_table_name,
             dataset_name="chessboard-segmentation-train",
             project_name=project_name,
         )
@@ -172,9 +190,9 @@ def train_model(
 
     tlc_val_dataset = (
         tlc.Table.from_names(
-            "table",
-            "chessboard-segmentation-val",
-            project_name,
+            table_name=val_table_name,
+            dataset_name="chessboard-segmentation-val",
+            project_name=project_name,
         )
         .map(TransformSampleToModel())
         .revision()
@@ -396,6 +414,7 @@ def train_model(
             "batch_size": batch_size,
             "epochs": epochs,
             "final_epoch": epoch,
+            "sweep_id": sweep_id or 0,
         }
     )
     return run, checkpoint_path
@@ -421,6 +440,9 @@ def get_args():
     parser.add_argument("--use-sample-weights", action="store_true", help="Use a weighted sampler")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--deterministic", action="store_true", help="Enable deterministic training")
+    parser.add_argument("--sweep-id", type=int, default=None, help="3LC sweep ID")
+    parser.add_argument("--train-table", type=str, default="table", help="Name of training table")
+    parser.add_argument("--val-table", type=str, default="table", help="Name of validation table")
 
     return parser.parse_args()
 
@@ -468,6 +490,9 @@ if __name__ == "__main__":
         threshold=args.threshold,
         seed=args.seed,
         deterministic=args.deterministic,
+        sweep_id=args.sweep_id,
+        train_table_name=args.train_table,
+        val_table_name=args.val_table,
     )
     stop = time.time()
     minutes = int((stop - start) // 60)
