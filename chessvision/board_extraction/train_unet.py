@@ -115,7 +115,7 @@ class AugmentImages:
 
 
 class PrepareModelOutputsForLogging:
-    def __init__(self, threshold: float = 0.3):
+    def __init__(self, threshold: float = 0.5):
         self.threshold = threshold
 
     def __call__(self, batch, predictor_output: tlc.PredictorOutput):
@@ -146,7 +146,7 @@ def train_model(
     validations_per_epoch: int = 2,
     collection_frequency: int = 5,
     patience: int = 5,
-    threshold: float = 0.3,
+    threshold: float = 0.5,
     seed: int = 42,
     deterministic: bool = False,
     sweep_id: int | None = None,
@@ -454,7 +454,7 @@ def get_args():
     parser.add_argument("--project-name", type=str, default="chessvision-segmentation", help="3LC project name")
     parser.add_argument("--run-name", type=str, default=None, help="3LC run name")
     parser.add_argument("--run-description", type=str, default=None, help="3LC run description")
-    parser.add_argument("--threshold", type=float, default=0.3, help="Threshold for binarizing the output masks")
+    parser.add_argument("--threshold", type=float, default=0.5, help="Threshold for binarizing the output masks")
     parser.add_argument("--use-sample-weights", action="store_true", help="Use a weighted sampler")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--deterministic", action="store_true", help="Enable deterministic training")

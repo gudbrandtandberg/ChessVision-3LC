@@ -108,7 +108,7 @@ def run_tests(
     run: tlc.Run | None = None,
     extractor: torch.nn.Module | None = None,
     classifier: torch.nn.Module | None = None,
-    threshold: float = 0.3,
+    threshold: float = 0.5,
     project_name: str = PROJECT_NAME,
 ) -> tlc.Run:
     """Run evaluation on test images."""
@@ -252,7 +252,7 @@ def parse_args():
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--image-folder", type=str, default=str(TEST_DATA_DIR / "raw"))
     argparser.add_argument("--truth-folder", type=str, default=str(TEST_DATA_DIR / "ground_truth"))
-    argparser.add_argument("--threshold", type=float, default=0.3)
+    argparser.add_argument("--threshold", type=float, default=0.5)
     argparser.add_argument("--project-name", type=str, default="chessvision-testing")
 
     return argparser.parse_args()
