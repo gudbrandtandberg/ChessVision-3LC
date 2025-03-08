@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import argparse
 import io
+import logging
 import time
+from collections.abc import Generator
 from pathlib import Path
 
 import cairosvg
@@ -14,16 +18,18 @@ from tqdm import tqdm
 
 from chessvision.core import ChessVision
 
+logger = logging.getLogger(__name__)
+
 TEST_DATA_DIR = Path(ChessVision.DATA_ROOT) / "test"
 PROJECT_NAME = "chessvision-testing"
 LABEL_NAMES = ChessVision.LABEL_NAMES
 
 
-def accuracy(a, b):
+def accuracy(a: list[str], b: list[str]) -> float:
     return sum([aa == bb for aa, bb in zip(a, b)]) / len(a)
 
 
-def top_k_accuracy(predictions, true_labels, k=3):
+def top_k_accuracy(predictions: np.ndarray, true_labels: np.ndarray, k: int = 3) -> tuple[float, float, float]:
     """
     predictions: (64, 13) probability distributions
     truth      : (64, 1)  true labels
@@ -53,15 +59,14 @@ def top_k_accuracy(predictions, true_labels, k=3):
     return tuple(accuracies)
 
 
-def snake(squares):
+def snake(squares: list[str]) -> list[str]:
     assert len(squares) == 64
     for i in range(8):
         squares[i * 8 : (i + 1) * 8] = list(reversed(squares[i * 8 : (i + 1) * 8]))
-    squares = list(reversed(squares))
-    return squares
+    return list(reversed(squares))
 
 
-def vectorize_chessboard(board):
+def vectorize_chessboard(board: chess.Board) -> list[str]:
     res = list("f" * 64)
 
     piecemap = board.piece_map()
@@ -74,8 +79,8 @@ def vectorize_chessboard(board):
     return res
 
 
-def get_test_generator(image_dir: Path):
-    img_filenames = ChessVision._listdir_nohidden(image_dir)
+def get_test_generator(image_dir: Path) -> Generator[tuple[str, np.ndarray], None, None]:
+    img_filenames = ChessVision._listdir_nohidden(str(image_dir))
     test_imgs = np.array([cv2.imread(str(image_dir / x)) for x in img_filenames])
 
     for i in range(len(test_imgs)):
@@ -88,7 +93,7 @@ def chessboard_to_pil_image(chessboard: chess.Board) -> Image.Image:
     return Image.open(io.BytesIO(buffer))
 
 
-def save_svg(chessboard: chess.Board, path: Path):
+def save_svg(chessboard: chess.Board, path: Path) -> None:
     svg = chess.svg.board(chessboard)
     cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=str(path))
 
@@ -163,8 +168,8 @@ def evaluate_model(
             Image.fromarray(result.board_extraction.binary_mask).save(predicted_mask_url)
 
             if result.position is None:
-                print(f"Failed to classify {filename}")
                 extraction_failures += 1
+                logger.warning(f"Failed to extract board from {filename}")
 
                 metrics_batch = {
                     "raw_img": [str(image_folder / filename)],
@@ -190,7 +195,7 @@ def evaluate_model(
             # Load the true labels
             truth_file = truth_folder / (filename[:-4] + ".txt")
 
-            with open(truth_file) as truth:
+            with truth_file.open("r") as truth:
                 true_labels = truth.read()
 
             true_labels = snake(list(true_labels))
@@ -250,14 +255,14 @@ def evaluate_model(
         },
     )
 
-    print(f"Evaluated {test_set_size} raw images")
+    logger.info(f"Evaluated {test_set_size} raw images")
     metrics_table = metrics_writer.finalize()
     run.add_metrics_table(metrics_table)
     run.set_status_completed()
     return run
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate ChessVision model on test dataset")
     parser.add_argument("--image-folder", type=str, default=str(TEST_DATA_DIR / "raw"))
     parser.add_argument("--truth-folder", type=str, default=str(TEST_DATA_DIR / "ground_truth"))
@@ -270,7 +275,7 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    print("Running ChessVision evaluation...")
+    logger.info("Running ChessVision evaluation...")
     args = parse_args()
     start = time.time()
 
@@ -283,8 +288,8 @@ if __name__ == "__main__":
         classifier_weights=args.classifier_weights,
     )
     stop = time.time()
-    print(f"Evaluation completed in {stop - start:.1f}s")
+    logger.info(f"Evaluation completed in {stop - start:.1f}s")
     if "test_results" in run.constants["parameters"]:
-        print("Test accuracy: {}".format(run.constants["parameters"]["test_results"]["top_1_accuracy"]))
-        print("Top-2 accuracy: {}".format(run.constants["parameters"]["test_results"]["top_2_accuracy"]))
-        print("Top-3 accuracy: {}".format(run.constants["parameters"]["test_results"]["top_3_accuracy"]))
+        logger.info("Test accuracy: {}".format(run.constants["parameters"]["test_results"]["top_1_accuracy"]))
+        logger.info("Top-2 accuracy: {}".format(run.constants["parameters"]["test_results"]["top_2_accuracy"]))
+        logger.info("Top-3 accuracy: {}".format(run.constants["parameters"]["test_results"]["top_3_accuracy"]))

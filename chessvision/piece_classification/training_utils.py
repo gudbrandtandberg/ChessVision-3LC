@@ -1,7 +1,10 @@
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EarlyStopping:
-    def __init__(self, patience=7, verbose=True, delta=0):
+    def __init__(self, patience: int = 7, verbose: bool = True, delta: float = 0):
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
@@ -10,7 +13,7 @@ class EarlyStopping:
         self.val_loss_min = float("inf")
         self.delta = delta
 
-    def __call__(self, val_loss, model):
+    def __call__(self, val_loss: float) -> None:
         score = -val_loss
 
         if self.best_score is None:
@@ -18,7 +21,7 @@ class EarlyStopping:
         elif score < self.best_score + self.delta:
             self.counter += 1
             if self.verbose:
-                print(f"EarlyStopping counter: {self.counter} out of {self.patience}")
+                logger.info(f"EarlyStopping counter: {self.counter} out of {self.patience}")
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
@@ -26,7 +29,12 @@ class EarlyStopping:
             self.counter = 0
 
 
-def plot_metrics(train_losses, val_losses, train_accuracies, val_accuracies):
+def plot_metrics(
+    train_losses: list[float],
+    val_losses: list[float],
+    train_accuracies: list[float],
+    val_accuracies: list[float],
+) -> None:
     import matplotlib.pyplot as plt
 
     plt.figure(figsize=(10, 5))

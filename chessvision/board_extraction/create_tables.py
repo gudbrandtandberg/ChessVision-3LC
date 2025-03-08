@@ -25,7 +25,7 @@ assert dir_mask.exists()
 scale = 1.0
 
 
-def create_tables():
+def create_tables() -> tuple[tlc.Table, tlc.Table]:
     # 1. Create dataset
     dataset = BasicDataset(dir_img.as_posix(), dir_mask.as_posix(), scale)
 
@@ -53,8 +53,7 @@ def create_tables():
         if_exists="reuse",
     )
 
-    print(f"Created val table {tlc_val_dataset.url}")
-    print(f"Created train table {tlc_train_dataset.url}")
+    return tlc_val_dataset, tlc_train_dataset
 
 
 if __name__ == "__main__":

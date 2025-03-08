@@ -11,10 +11,10 @@ import numpy as np
 import tlc
 import torch
 import torch.nn as nn
-import torchvision.transforms.functional as F
+import torchvision.transforms.functional as F  # noqa: N812
 from torch import optim
 from torch.utils.data import DataLoader
-from torchvision import transforms as T
+from torchvision import transforms as T  # noqa: N812
 from tqdm import tqdm
 
 from chessvision.board_extraction.loss_collector import LossCollector
@@ -34,7 +34,7 @@ tlc.register_url_alias(
 )
 
 
-def worker_init_fn(worker_id: int):
+def worker_init_fn(worker_id: int) -> None:
     """Initialize worker with a unique seed."""
     worker_seed = 42 + worker_id  # Base seed + worker offset
     np.random.seed(worker_seed)
@@ -42,7 +42,7 @@ def worker_init_fn(worker_id: int):
     torch.manual_seed(worker_seed)
 
 
-def set_deterministic_mode(seed=42):
+def set_deterministic_mode(seed: int = 42) -> None:
     """Set seeds and configurations for deterministic training."""
     random.seed(seed)
     np.random.seed(seed)
@@ -57,7 +57,11 @@ def set_deterministic_mode(seed=42):
     os.environ["PYTHONHASHSEED"] = str(seed)
 
 
-def save_extractor_checkpoint(model: torch.nn.Module, checkpoint_path: str, metadata: dict[str, Any]):
+def save_extractor_checkpoint(
+    model: torch.nn.Module,
+    checkpoint_path: str,
+    metadata: dict[str, Any],
+) -> None:
     state_dict = {"model_state_dict": model.state_dict(), "metadata": metadata}
     torch.save(state_dict, checkpoint_path)
 
@@ -117,7 +121,11 @@ class PrepareModelOutputsForLogging:
     def __init__(self, threshold: float = 0.5):
         self.threshold = threshold
 
-    def __call__(self, batch, predictor_output: tlc.PredictorOutput):
+    def __call__(
+        self,
+        batch: dict[str, Any],
+        predictor_output: tlc.PredictorOutput,
+    ) -> tuple[dict[str, Any], torch.Tensor]:
         predictions_tensor = predictor_output.forward
 
         for i in range(len(predictions_tensor)):
@@ -153,7 +161,7 @@ def train_model(
     val_table_name: str = "table",
     train_dataset_name: str = "chessboard-segmentation-train",
     val_dataset_name: str = "chessboard-segmentation-val",
-):
+) -> tuple[tlc.Run, tlc.Url]:
     if deterministic:
         # Only set up worker seeds, main process already deterministic
         seed_worker = worker_init_fn
@@ -211,7 +219,7 @@ def train_model(
     # 3. Create data loaders
     train_loader = DataLoader(
         tlc_train_dataset,
-        shuffle=False if use_sample_weights else True,
+        shuffle=not use_sample_weights,
         sampler=tlc_train_dataset.create_sampler() if use_sample_weights else None,
         batch_size=batch_size,
         num_workers=4,
@@ -401,7 +409,7 @@ def train_model(
             )
 
             if patience_counter >= patience and epoch != epochs:
-                print(f"Early stopping triggered after {epoch} epochs")
+                logging.info(f"Early stopping triggered after {epoch} epochs")
                 break
 
         # Clear cache between epochs
@@ -437,7 +445,7 @@ def train_model(
     return run, checkpoint_path
 
 
-def get_args():
+def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
     parser.add_argument("--epochs", "-e", metavar="E", type=int, default=20, help="Number of epochs")
     parser.add_argument("--batch-size", "-b", dest="batch_size", metavar="B", type=int, default=2, help="Batch size")
@@ -506,7 +514,7 @@ if __name__ == "__main__":
     )
 
     if args.load:
-        model = ChessVision.load_model_checkpoint(model, ChessVision.best_extractor_weights, device)
+        model = ChessVision.load_model_checkpoint(model, ChessVision.EXTRACTOR_WEIGHTS, device)
 
     run, checkpoint_path = train_model(
         model=model,

@@ -6,6 +6,7 @@ Will not include any analysis, but will contain logic for editing results.
 
 import argparse
 import sys
+import warnings
 
 from flask import Flask, render_template
 
@@ -15,8 +16,7 @@ endpoint = None
 
 
 @app.route("/")
-def home():
-    print(endpoint)
+def home() -> str:
     return render_template("index.html", endpoint=endpoint)
 
 
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     elif args.local == "server":
         endpoint = "server"
     else:
-        print("--local flag must be either 'container' or 'server'")
+        warnings.warn("--local flag must be either 'container' or 'server'", stacklevel=2)
         sys.exit(1)
 
     app.run(host="127.0.0.1", port=5000)

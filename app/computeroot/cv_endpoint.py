@@ -37,7 +37,7 @@ for piece_type in piece_types:
 
 # Set up logging
 class RequestFormatter(logging.Formatter):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         try:
             record.url = request.url
             record.remote_addr = request.remote_addr
@@ -111,7 +111,7 @@ def crossdomain(origin=None, methods=None, headers=None, max_age=21600, attach_t
 app = Flask(__name__)
 
 
-def FEN2JSON(fen):
+def fen_2_json(fen: str) -> dict[str, str]:
     piecemap = chess.Board(fen=fen).piece_map()
     predictedPos = {}
     for square_index in piecemap:
@@ -128,7 +128,7 @@ with app.app_context():
 
 @app.route("/cv_algo/", methods=["POST", "OPTIONS"])
 @crossdomain(origin="*", headers=["Content-Type"])
-def cv_algo():
+def cv_algo() -> tuple[dict[str, str], int]:
     """Process image from web interface."""
     global cv_model
 
@@ -162,7 +162,7 @@ def cv_algo():
         response = {
             "success": True,
             "fen": result.position.fen,
-            "position": FEN2JSON(result.position.fen),
+            "position": fen_2_json(result.position.fen),
             "confidence_scores": result.position.confidence_scores,
             "board_confidence": result.board_extraction.confidence_scores,
             "processing_time": result.processing_time,
@@ -188,7 +188,7 @@ def cv_algo():
 
 
 @app.route("/classify_image", methods=["POST"])
-def classify_image():
+def classify_image() -> tuple[dict[str, str], int]:
     global cv_model
 
     if cv_model is None:
@@ -223,7 +223,7 @@ def classify_image():
         response = {
             "success": True,
             "fen": result.position.fen,
-            "position": FEN2JSON(result.position.fen),
+            "position": fen_2_json(result.position.fen),
             "confidence_scores": result.position.confidence_scores,
             "board_confidence": result.board_extraction.confidence_scores,
             "processing_time": result.processing_time,

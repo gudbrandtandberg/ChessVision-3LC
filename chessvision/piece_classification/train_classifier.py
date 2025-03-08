@@ -1,4 +1,5 @@
 import argparse
+import logging
 import time
 from typing import Any
 
@@ -11,13 +12,15 @@ import torch.optim as optim
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 import tqdm
+from PIL.Image import Image
 from torch.utils.data import DataLoader
 
 from chessvision.core import ChessVision
 from chessvision.piece_classification.training_utils import EarlyStopping
 
-mp.set_start_method("spawn", force=True)
+logger = logging.getLogger(__name__)
 
+mp.set_start_method("spawn", force=True)
 
 DATASET_ROOT = f"{ChessVision.DATA_ROOT}/squares"
 tlc.register_url_alias("CHESSPIECES_DATASET_ROOT", DATASET_ROOT)
@@ -61,11 +64,11 @@ val_transforms = transforms.Compose(
 )
 
 
-def train_map(sample):
+def train_map(sample: tuple[Image, int]) -> tuple[torch.Tensor, int]:
     return train_transforms(sample[0]), sample[1]
 
 
-def val_map(sample):
+def val_map(sample: tuple[Image, int]) -> tuple[torch.Tensor, int]:
     return val_transforms(sample[0]), sample[1]
 
 
@@ -87,10 +90,9 @@ def train(
     correct = 0
     total = 0
     for data, target in tqdm.tqdm(train_loader, desc="Training", total=len(train_loader)):
-        data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
-        output = model(data)
-        loss = criterion(output, target)
+        output = model(data.to(device))
+        loss = criterion(output, target.to(device))
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
@@ -110,9 +112,8 @@ def validate(model, val_loader, criterion, device):
     total = 0
     with torch.no_grad():
         for data, target in tqdm.tqdm(val_loader, desc="Validation", total=len(val_loader)):
-            data, target = data.to(device), target.to(device)
-            output = model(data)
-            loss = criterion(output, target)
+            output = model(data.to(device))
+            loss = criterion(output, target.to(device))
             running_loss += loss.item()
             _, predicted = output.max(1)
             total += target.size(0)
@@ -147,7 +148,7 @@ def save_checkpoint(model, optimizer, epoch=None, best_val_loss=None, filename="
     return filename
 
 
-def main(args):
+def main(args: argparse.Namespace) -> None:
     # Training variables
     start = time.time()
     early_stopping = EarlyStopping(patience=EARLY_STOPPING_PATIENCE, verbose=True)
@@ -213,15 +214,15 @@ def main(args):
         .revision()
     )
 
-    print(f"Using training dataset: {tlc_train_dataset.url}")
-    print(f"Using validation dataset: {tlc_val_dataset.url}")
+    logger.info(f"Using training dataset: {tlc_train_dataset.url}")
+    logger.info(f"Using validation dataset: {tlc_val_dataset.url}")
 
     # Create data loaders
     sampler = tlc_train_dataset.create_sampler() if args.use_sample_weights else None
     train_data_loader = DataLoader(
         tlc_train_dataset,
         batch_size=BATCH_SIZE,
-        shuffle=False if sampler else True,
+        shuffle=not sampler,
         sampler=sampler,
         num_workers=4,
         pin_memory=True,
@@ -269,7 +270,7 @@ def main(args):
             },
         )
 
-        print(
+        logger.info(
             f"Epoch: {epoch + 1}, "
             f"Train Loss: {train_loss:.4f}, "
             f"Val Loss: {val_loss:.4f}, "
@@ -280,7 +281,7 @@ def main(args):
         if val_acc > best_val_accuracy:
             best_val_loss = val_loss
             best_val_accuracy = val_acc
-            print("Saving model...")
+            logger.info("Saving model...")
             save_checkpoint(
                 model,
                 optimizer,
@@ -289,10 +290,10 @@ def main(args):
                 str(checkpoint_path),
             )
 
-        early_stopping(val_loss, model)
+        early_stopping(val_loss)
 
         if early_stopping.early_stop:
-            print("Early stopping")
+            logger.info("Early stopping")
             break
 
     tlc.collect_metrics(
@@ -320,12 +321,15 @@ def main(args):
     duration = time.time() - start
     minutes = int(duration // 60)
     seconds = int(duration % 60)
-    print(f"Training completed in {minutes} minutes and {seconds} seconds.")
+    logger.info(f"Training completed in {minutes} minutes and {seconds} seconds.")
 
     if args.compute_embeddings:
-        print("Reducing embeddings...")
+        logger.info("Reducing embeddings...")
         run.reduce_embeddings_by_foreign_table_url(
-            tlc_train_dataset.url, n_components=2, method="pacmap", delete_source_tables=True,
+            tlc_train_dataset.url,
+            n_components=2,
+            method="pacmap",
+            delete_source_tables=True,
         )
 
     run.set_parameters(
@@ -336,22 +340,16 @@ def main(args):
         },
     )
     if args.run_tests:
-        from chessvision.test import run_tests
+        from chessvision.evaluate import evaluate_model
 
-        print("Running tests...")
+        logger.info("Running tests...")
         del model
-        # Reload the model from the best epoch
-        model = get_classifier_model()
-        model, _, _, _ = load_checkpoint(model, None, checkpoint_path.to_str())
-        model.eval()
-        model.to(device)
-        run_tests(run=run, classifier=model)
+        evaluate_model(run=run, classifier_weights=checkpoint_path.to_str())
 
 
 def get_classifier_model():
     """Initialize the piece classifier model."""
-    model = timm.create_model(MODEL_ID, num_classes=NUM_CLASSES, in_chans=1)
-    return model
+    return timm.create_model(MODEL_ID, num_classes=NUM_CLASSES, in_chans=1)
 
 
 if __name__ == "__main__":

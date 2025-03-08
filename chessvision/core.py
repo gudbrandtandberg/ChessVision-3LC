@@ -1,17 +1,18 @@
 """Core ChessVision functionality."""
 
+from __future__ import annotations
+
 import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional, Tuple
 
 import chess
 import cv2
 import numpy as np
 import timm
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 
 from .pytorch_unet.unet.unet_model import UNet
 from .types import BoardExtractionResult, ChessVisionResult, PositionResult
@@ -123,8 +124,8 @@ class ChessVision:
 
     def __init__(
         self,
-        board_extractor_weights: Optional[str] = None,
-        classifier_weights: Optional[str] = None,
+        board_extractor_weights: str | None = None,
+        classifier_weights: str | None = None,
         lazy_load: bool = True,
     ):
         """Initialize ChessVision with optional custom model weights.
@@ -138,8 +139,8 @@ class ChessVision:
                       If False, models are loaded immediately.
         """
         self.device = self.get_device()
-        self._board_extractor = None
-        self._classifier = None
+        self._board_extractor: torch.nn.Module | None = None
+        self._classifier: torch.nn.Module | None = None
         self._board_extractor_weights = board_extractor_weights or self.EXTRACTOR_WEIGHTS
         self._classifier_weights = classifier_weights or self.CLASSIFIER_WEIGHTS
 
@@ -169,14 +170,14 @@ class ChessVision:
         return [f for f in os.listdir(path) if not f.startswith(".")]
 
     @property
-    def board_extractor(self):
+    def board_extractor(self) -> torch.nn.Module:
         """Get the board extractor model, initializing if needed."""
         if self._board_extractor is None:
             self._initialize_board_extractor()
         return self._board_extractor
 
     @property
-    def classifier(self):
+    def classifier(self) -> torch.nn.Module:
         """Get the classifier model, initializing if needed."""
         if self._classifier is None:
             self._initialize_classifier()
@@ -384,10 +385,7 @@ class ChessVision:
         # Create chess board from labels
         board = chess.BaseBoard(board_fen=None)
         for pred_label, sq in zip(pred_labels, square_names):
-            if pred_label == "f":
-                piece = None
-            else:
-                piece = chess.Piece.from_symbol(pred_label)
+            piece = None if pred_label == "f" else chess.Piece.from_symbol(pred_label)
             square = chess.SQUARE_NAMES.index(sq)
             board.set_piece_at(square, piece, promoted=False)
 
@@ -408,12 +406,9 @@ class ChessVision:
         return mask.astype(np.uint8)
 
     @staticmethod
-    def _find_quadrangle(mask: np.ndarray) -> Optional[np.ndarray]:
+    def _find_quadrangle(mask: np.ndarray) -> np.ndarray | None:
         """Find a quadrangle (4-sided polygon) in a binary mask."""
-        try:
-            contours, _ = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_TC89_KCOS)
-        except ValueError:
-            _, contours, _ = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_TC89_KCOS)
+        contours, _ = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_TC89_KCOS)
 
         if len(contours) > 1:
             contours = ChessVision._filter_contours(mask.shape, contours)
@@ -464,7 +459,7 @@ class ChessVision:
         return approx
 
     @staticmethod
-    def _scale_quadrangle(approx: np.ndarray, orig_size: Tuple[int, int]) -> np.ndarray:
+    def _scale_quadrangle(approx: np.ndarray, orig_size: tuple[int, int]) -> np.ndarray:
         """Scale quadrangle approximation to match original image size."""
         sf = orig_size[0] / 256.0
         return np.array(approx * sf, dtype=np.uint32)
@@ -473,7 +468,7 @@ class ChessVision:
     def _extract_perspective(
         image: np.ndarray,
         approx: np.ndarray,
-        out_size: Tuple[int, int],
+        out_size: tuple[int, int],
     ) -> np.ndarray:
         """Extract a perspective-corrected region from an image."""
         w, h = out_size[0], out_size[1]
@@ -558,8 +553,8 @@ class ChessVision:
                         break
 
         # Fix bishops (no more than one per color square per side)
-        white_bishops = {"dark": [], "light": []}
-        black_bishops = {"dark": [], "light": []}
+        white_bishops: dict[str, list[tuple[int, float]]] = {"dark": [], "light": []}
+        black_bishops: dict[str, list[tuple[int, float]]] = {"dark": [], "light": []}
 
         # Find all bishops
         for i, (label, name) in enumerate(zip(pred_labels, square_names)):
@@ -600,7 +595,7 @@ class ChessVision:
         cls,
         model: torch.nn.Module,
         checkpoint_path: str,
-        device: Optional[torch.device] = None,
+        device: torch.device | None = None,
     ) -> torch.nn.Module:
         """Load a model checkpoint.
 
