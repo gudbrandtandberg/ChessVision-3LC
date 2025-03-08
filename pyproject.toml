@@ -138,6 +138,9 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
+exclude = [
+    "scripts/.*",  # Exclude all files under scripts directory
+]
 
 [[tool.mypy.overrides]]
 module = ["cv2.*", "timm.*", "torch.*", "torchvision.*"]
