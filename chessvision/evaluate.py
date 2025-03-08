@@ -9,7 +9,6 @@ import chess.svg
 import cv2
 import numpy as np
 import tlc
-import torch
 from PIL import Image
 from tqdm import tqdm
 

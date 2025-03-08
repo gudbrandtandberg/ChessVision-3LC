@@ -523,7 +523,7 @@ if __name__ == "__main__":
 
     # Run evaluation if requested
     if args.run_tests:
-        from chessvision.evaluation.evaluate import evaluate_model
+        from chessvision.evaluate import evaluate_model
 
         del model
 
