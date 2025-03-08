@@ -247,7 +247,7 @@ def evaluate_model(
         {
             "test_results": aggregate_data,
             "threshold": threshold,
-        }
+        },
     )
 
     print(f"Evaluated {test_set_size} raw images")

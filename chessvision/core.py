@@ -12,7 +12,6 @@ import numpy as np
 import timm
 import torch
 import torch.nn.functional as F
-from PIL import Image
 
 from .pytorch_unet.unet.unet_model import UNet
 from .types import BoardExtractionResult, ChessVisionResult, PositionResult
@@ -153,7 +152,7 @@ class ChessVision:
         """Get the best available device for PyTorch."""
         if torch.cuda.is_available():
             return torch.device("cuda")
-        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return torch.device("mps")
         return torch.device("cpu")
 
@@ -189,7 +188,7 @@ class ChessVision:
         self._board_extractor = UNet(n_channels=3, n_classes=1)
         self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)
         self._board_extractor = self.load_model_checkpoint(
-            self._board_extractor, self._board_extractor_weights, self.device
+            self._board_extractor, self._board_extractor_weights, self.device,
         )
         self._board_extractor.eval()
         self._board_extractor.to(self.device)

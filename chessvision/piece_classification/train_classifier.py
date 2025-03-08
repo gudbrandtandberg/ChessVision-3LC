@@ -1,6 +1,5 @@
 import argparse
 import time
-from pathlib import Path
 from typing import Any
 
 import timm
@@ -49,7 +48,7 @@ train_transforms = transforms.Compose(
         transforms.RandomRotation(degrees=15),
         transforms.ToTensor(),
         transforms.Normalize([0.564], [0.246]),
-    ]
+    ],
 )
 
 val_transforms = transforms.Compose(
@@ -58,7 +57,7 @@ val_transforms = transforms.Compose(
         transforms.Grayscale(),
         transforms.ToTensor(),
         transforms.Normalize([0.564], [0.246]),
-    ]
+    ],
 )
 
 
@@ -267,7 +266,7 @@ def main(args):
                 "val_acc": val_acc,
                 "epoch": epoch,
                 "learning_rate": optimizer.param_groups[0]["lr"],
-            }
+            },
         )
 
         print(
@@ -275,7 +274,7 @@ def main(args):
             f"Train Loss: {train_loss:.4f}, "
             f"Val Loss: {val_loss:.4f}, "
             f"Train Acc: {train_acc:.2f}%, "
-            f"Val Acc: {val_acc:.2f}%"
+            f"Val Acc: {val_acc:.2f}%",
         )
 
         if val_acc > best_val_accuracy:
@@ -326,7 +325,7 @@ def main(args):
     if args.compute_embeddings:
         print("Reducing embeddings...")
         run.reduce_embeddings_by_foreign_table_url(
-            tlc_train_dataset.url, n_components=2, method="pacmap", delete_source_tables=True
+            tlc_train_dataset.url, n_components=2, method="pacmap", delete_source_tables=True,
         )
 
     run.set_parameters(
@@ -334,7 +333,7 @@ def main(args):
             "best_val_accuracy": best_val_accuracy,
             "model_path": checkpoint_path.apply_aliases().to_str(),
             "use_sample_weights": args.use_sample_weights,
-        }
+        },
     )
     if args.run_tests:
         from chessvision.test import run_tests

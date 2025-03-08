@@ -23,7 +23,7 @@ class LossCollector(tlc.MetricsCollector):
         unreduced_criterion = nn.BCEWithLogitsLoss(reduction="none")
 
         unreduced_dice_loss = dice_loss(
-            torch.sigmoid(predictions), masks.float(), multiclass=False, reduce_batch_first=False, reduction="none"
+            torch.sigmoid(predictions), masks.float(), multiclass=False, reduce_batch_first=False, reduction="none",
         )
 
         unreduced_bce_loss = unreduced_criterion(predictions, masks.float()).mean((-1, -2))

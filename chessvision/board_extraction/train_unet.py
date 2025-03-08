@@ -242,7 +242,7 @@ def train_model(
         Images scaling:   {img_scale}
         Mixed Precision:  {amp}
         Sampling weights: {use_sample_weights}
-    """
+    """,
     )
 
     # 4. Set up the optimizer, the loss, the learning rate scheduler and the loss scaling for AMP
@@ -346,7 +346,7 @@ def train_model(
                             "val_dice": val_score.item(),
                             "step": global_step,
                             "lr": optimizer.param_groups[0]["lr"],
-                        }
+                        },
                     )
 
         if save_checkpoint and val_score > best_val_score:
@@ -432,7 +432,7 @@ def train_model(
             "val_table": tlc_val_dataset.url.apply_aliases().to_str(),
             "final_epoch": epoch,
             "training_time": training_time,
-        }
+        },
     )
     return run, checkpoint_path
 
@@ -442,7 +442,7 @@ def get_args():
     parser.add_argument("--epochs", "-e", metavar="E", type=int, default=20, help="Number of epochs")
     parser.add_argument("--batch-size", "-b", dest="batch_size", metavar="B", type=int, default=2, help="Batch size")
     parser.add_argument(
-        "--learning-rate", "-l", metavar="LR", type=float, default=1e-7, help="Learning rate", dest="lr"
+        "--learning-rate", "-l", metavar="LR", type=float, default=1e-7, help="Learning rate", dest="lr",
     )
     parser.add_argument("--load", "-f", type=str, default=False, help="Load model from a .pth file")
     parser.add_argument("--scale", "-s", type=float, default=1.0, help="Downscaling factor of the images")
@@ -461,10 +461,10 @@ def get_args():
     parser.add_argument("--train-table", type=str, default="table", help="Name of training table")
     parser.add_argument("--val-table", type=str, default="table", help="Name of validation table")
     parser.add_argument(
-        "--train-dataset", type=str, default="chessboard-segmentation-train", help="Name of training dataset"
+        "--train-dataset", type=str, default="chessboard-segmentation-train", help="Name of training dataset",
     )
     parser.add_argument(
-        "--val-dataset", type=str, default="chessboard-segmentation-val", help="Name of validation dataset"
+        "--val-dataset", type=str, default="chessboard-segmentation-val", help="Name of validation dataset",
     )
 
     return parser.parse_args()
@@ -490,7 +490,7 @@ if __name__ == "__main__":
         f"\t{model.n_channels} input channels\n"
         f"\t{model.n_classes} output channels (classes)\n"
         f"\t{'Bilinear' if model.bilinear else 'Transposed conv'} upscaling"
-        f"\t{'Device: ' + str(device)}"
+        f"\t{'Device: ' + str(device)}",
     )
 
     if args.load:
