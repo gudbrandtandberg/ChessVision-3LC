@@ -29,7 +29,7 @@ def accuracy(a: list[str], b: list[str]) -> float:
     return sum([aa == bb for aa, bb in zip(a, b)]) / len(a)
 
 
-def top_k_accuracy(predictions: np.ndarray, true_labels: np.ndarray, k: int = 3) -> tuple[float, float, float]:
+def top_k_accuracy(predictions: np.ndarray, true_labels: np.ndarray, k: int = 3) -> tuple[float, ...]:
     """
     predictions: (64, 13) probability distributions
     truth      : (64, 1)  true labels
@@ -154,7 +154,7 @@ def evaluate_model(
     top_3_accuracy = 0.0
 
     times = []
-    test_set_size = len(ChessVision._listdir_nohidden(image_folder))
+    test_set_size = len(ChessVision._listdir_nohidden(str(image_folder)))
     extraction_failures = 0
 
     with tlc.bulk_data_url_context(run.bulk_data_url, metrics_writer.url):
@@ -186,6 +186,8 @@ def evaluate_model(
 
                 metrics_writer.add_batch(metrics_batch)
                 continue
+
+            assert result.board_extraction.board_image is not None
 
             # Save the extracted board
             extracted_board_url = Path((run.bulk_data_url / "extracted_board" / (filename[:-4] + ".png")).to_str())

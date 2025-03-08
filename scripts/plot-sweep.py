@@ -95,7 +95,11 @@ fig = go.Figure(
 
 # Update layout
 fig.update_layout(
-    plot_bgcolor="white", paper_bgcolor="white", title="Hyperparameter Sweep Results", width=1000, height=600
+    plot_bgcolor="white",
+    paper_bgcolor="white",
+    title="Hyperparameter Sweep Results",
+    width=1000,
+    height=600,
 )
 
 # Show plot in browser

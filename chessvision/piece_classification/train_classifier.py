@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import logging
 import time
@@ -84,7 +86,7 @@ def train(
     criterion: nn.Module,
     optimizer: optim.Optimizer,
     device: torch.device,
-):
+) -> tuple[float, float]:
     model.train()
     running_loss = 0.0
     correct = 0
@@ -105,7 +107,12 @@ def train(
     return train_loss, accuracy
 
 
-def validate(model, val_loader, criterion, device):
+def validate(
+    model: torch.nn.Module,
+    val_loader: torch.utils.data.DataLoader,
+    criterion: nn.Module,
+    device: torch.device,
+) -> tuple[float, float]:
     model.eval()
     running_loss = 0.0
     correct = 0
@@ -124,7 +131,11 @@ def validate(model, val_loader, criterion, device):
     return val_loss, accuracy
 
 
-def load_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer | None = None, filename="checkpoint.pth"):
+def load_checkpoint(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer | None = None,
+    filename: str = "checkpoint.pth",
+) -> tuple[torch.nn.Module, torch.optim.Optimizer | None, int, float]:
     device = ChessVision.get_device()
     checkpoint = torch.load(filename, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
@@ -135,7 +146,13 @@ def load_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer | N
     return model, optimizer, epoch, best_val_loss
 
 
-def save_checkpoint(model, optimizer, epoch=None, best_val_loss=None, filename="checkpoint.pth") -> str:
+def save_checkpoint(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    epoch: int | None = None,
+    best_val_loss: float | None = None,
+    filename: str = "checkpoint.pth",
+) -> str:
     torch.save(
         {
             "epoch": epoch,
@@ -161,10 +178,6 @@ def main(args: argparse.Namespace) -> None:
     start_epoch = 0
     best_val_loss = float("inf")
     best_val_accuracy = 0.0
-
-    # if CHECKPOINT_PATH.exists() and args.resume:
-    #     model, optimizer, start_epoch, best_val_loss = load_checkpoint(model, optimizer, str(CHECKPOINT_PATH))
-    #     start_epoch += 1  # Increment to continue from next epoch
 
     # Create a Run object
     run_parameters = {
@@ -347,9 +360,9 @@ def main(args: argparse.Namespace) -> None:
         evaluate_model(run=run, classifier_weights=checkpoint_path.to_str())
 
 
-def get_classifier_model():
+def get_classifier_model() -> torch.nn.Module:
     """Initialize the piece classifier model."""
-    return timm.create_model(MODEL_ID, num_classes=NUM_CLASSES, in_chans=1)
+    return timm.create_model(MODEL_ID, num_classes=NUM_CLASSES, in_chans=1)  # type: ignore
 
 
 if __name__ == "__main__":

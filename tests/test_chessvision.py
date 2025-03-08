@@ -10,13 +10,13 @@ from chessvision import ChessVision
 
 
 @pytest.fixture
-def cv_model():
+def cv_model() -> ChessVision:
     """Create a ChessVision instance with default weights."""
     return ChessVision()
 
 
 @pytest.fixture
-def test_image():
+def test_image() -> np.ndarray:
     """Load a test image from the test data directory."""
     test_image_path = Path(ChessVision.DATA_ROOT) / "test" / "raw" / "1bf29f73-bc30-448b-a894-bd6428754a0c.JPG"
     if not test_image_path.exists():
@@ -24,7 +24,7 @@ def test_image():
     return cv2.imread(str(test_image_path))
 
 
-def test_chessvision_initialization():
+def test_chessvision_initialization() -> None:
     """Test that ChessVision can be initialized with default and custom weights."""
     # Test default initialization
     cv = ChessVision()
@@ -44,7 +44,7 @@ def test_chessvision_initialization():
     assert cv._classifier_weights == custom_classifier
 
 
-def test_process_image(cv_model, test_image):
+def test_process_image(cv_model: ChessVision, test_image: np.ndarray) -> None:
     """Test the main image processing pipeline."""
     result = cv_model.process_image(test_image)
 
@@ -69,7 +69,7 @@ def test_process_image(cv_model, test_image):
     assert result.processing_time > 0
 
 
-def test_extract_board(cv_model, test_image):
+def test_extract_board(cv_model: ChessVision, test_image: np.ndarray) -> None:
     """Test board extraction specifically."""
     result = cv_model.extract_board(test_image)
 
@@ -85,7 +85,7 @@ def test_extract_board(cv_model, test_image):
         assert result.quadrangle is not None
 
 
-def test_classify_position(cv_model, test_image):
+def test_classify_position(cv_model: ChessVision, test_image: np.ndarray) -> None:
     """Test position classification with a known board image."""
     # First extract the board
     board_result = cv_model.extract_board(test_image)

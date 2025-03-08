@@ -217,7 +217,7 @@ def enrich_tlc_table(
                 v2.ToImage(),
                 v2.ToDtype(torch.float32, scale=True),
                 v2.ConvertImageDtype(torch.float32),
-            ]
+            ],
         )
         return transforms(sample)
 

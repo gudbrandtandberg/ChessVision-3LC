@@ -12,12 +12,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # type: ignore
 
 from chessvision.core import ChessVision
 
 
-def print_tensor_info(name, tensor):
+def print_tensor_info(name: str, tensor: torch.Tensor | np.ndarray) -> None:
     """Print shape and basic statistics of a tensor."""
     if isinstance(tensor, torch.Tensor):
         print(f"{name}:")
@@ -38,7 +38,7 @@ def print_tensor_info(name, tensor):
             print(f"  Std: {tensor.std():.3f}")
 
 
-def print_board_ascii(fen: str):
+def print_board_ascii(fen: str) -> None:
     """Print chess board in ASCII format."""
     rows = fen.split("/")
     print("  +-----------------+")
@@ -53,7 +53,7 @@ def print_board_ascii(fen: str):
     print("  +-----------------+")
 
 
-def main():
+def main() -> None:
     flip = False  # Whether the board is shown from the white side
     threshold = 0.5  # Threshold for the board extraction
 

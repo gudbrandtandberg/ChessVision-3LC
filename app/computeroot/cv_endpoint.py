@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import update_wrapper
 from pathlib import Path
 
@@ -41,7 +41,7 @@ class RequestFormatter(logging.Formatter):
         try:
             record.url = request.url
             record.remote_addr = request.remote_addr
-        except:
+        except Exception:
             record.url = "-"
             record.remote_addr = "-"
         return super().format(record)
@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 formatter = RequestFormatter(
-    "[%(asctime)s] %(remote_addr)s requested %(url)s\n%(levelname)s in %(module)s: %(message)s"
+    "[%(asctime)s] %(remote_addr)s requested %(url)s\n%(levelname)s in %(module)s: %(message)s",
 )
 
 if not os.getenv("LOCAL"):
@@ -113,11 +113,11 @@ app = Flask(__name__)
 
 def fen_2_json(fen: str) -> dict[str, str]:
     piecemap = chess.Board(fen=fen).piece_map()
-    predictedPos = {}
+    predicted = {}
     for square_index in piecemap:
         square = chess.SQUARE_NAMES[square_index]
-        predictedPos[square] = str(piecemap[square_index].symbol())
-    return predictedPos
+        predicted[square] = str(piecemap[square_index].symbol())
+    return predicted
 
 
 # Initialize models globally
@@ -130,10 +130,6 @@ with app.app_context():
 @crossdomain(origin="*", headers=["Content-Type"])
 def cv_algo() -> tuple[dict[str, str], int]:
     """Process image from web interface."""
-    global cv_model
-
-    if cv_model is None:
-        cv_model = ChessVision(lazy_load=False)
 
     if request.method == "OPTIONS":
         return {"success": True}
@@ -164,7 +160,6 @@ def cv_algo() -> tuple[dict[str, str], int]:
             "fen": result.position.fen,
             "position": fen_2_json(result.position.fen),
             "confidence_scores": result.position.confidence_scores,
-            "board_confidence": result.board_extraction.confidence_scores,
             "processing_time": result.processing_time,
         }
 
@@ -189,11 +184,6 @@ def cv_algo() -> tuple[dict[str, str], int]:
 
 @app.route("/classify_image", methods=["POST"])
 def classify_image() -> tuple[dict[str, str], int]:
-    global cv_model
-
-    if cv_model is None:
-        cv_model = ChessVision(lazy_load=False)
-
     # Get the image from the POST request
     if "image" not in request.files:
         return "No image uploaded", 400
@@ -225,7 +215,6 @@ def classify_image() -> tuple[dict[str, str], int]:
             "fen": result.position.fen,
             "position": fen_2_json(result.position.fen),
             "confidence_scores": result.position.confidence_scores,
-            "board_confidence": result.board_extraction.confidence_scores,
             "processing_time": result.processing_time,
         }
 
@@ -271,14 +260,14 @@ def feedback():
             feedback_path = uploads_folder / "feedback" / f"{feedback_id}.json"
             feedback_path.parent.mkdir(exist_ok=True)
 
-            with open(feedback_path, "w") as f:
+            with feedback_path.open("w") as f:
                 json.dump(
                     {
                         "id": data["id"],
                         "position": data["position"],
                         "flip": data["flip"],
                         "predicted_fen": data["predictedFEN"],
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                     f,
                     indent=2,

@@ -8,10 +8,10 @@ def make_splits():
     import tlc
 
     val_table = tlc.Table.from_url(
-        "C:/Users/gudbrand/AppData/Local/3LC/3LC/projects/chessvision-segmentation/datasets/chessboard-segmentation-val/tables/table_0000"
+        "C:/Users/gudbrand/AppData/Local/3LC/3LC/projects/chessvision-segmentation/datasets/chessboard-segmentation-val/tables/table_0000",
     )
     train_table = tlc.Table.from_url(
-        "C:/Users/gudbrand/AppData/Local/3LC/3LC/projects/chessvision-segmentation/datasets/chessboard-segmentation-train/tables/table_0000"
+        "C:/Users/gudbrand/AppData/Local/3LC/3LC/projects/chessvision-segmentation/datasets/chessboard-segmentation-train/tables/table_0000",
     )
 
     root_dir = "data/board_extraction/yolo/masks"
@@ -28,8 +28,8 @@ if __name__ == "__main__":
     # make_splits()
 
     convert_segment_masks_to_yolo_seg(
-        "data/board_extraction/yolo/masks/train", "data/board_extraction/yolo/labels/train", classes=255
+        "data/board_extraction/yolo/masks/train", "data/board_extraction/yolo/labels/train", classes=255,
     )
     convert_segment_masks_to_yolo_seg(
-        "data/board_extraction/yolo/masks/val", "data/board_extraction/yolo/labels/val", classes=255
+        "data/board_extraction/yolo/masks/val", "data/board_extraction/yolo/labels/val", classes=255,
     )

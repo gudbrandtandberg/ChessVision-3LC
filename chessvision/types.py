@@ -1,4 +1,4 @@
-"""Type definitions for ChessVision."""
+"""Type definitions for ChessVision."""  # noqa: A005
 
 from dataclasses import dataclass
 from typing import Optional

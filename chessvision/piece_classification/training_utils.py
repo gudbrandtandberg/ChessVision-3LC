@@ -8,15 +8,14 @@ class EarlyStopping:
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
-        self.best_score = None
+        self.best_score = float("inf")
         self.early_stop = False
-        self.val_loss_min = float("inf")
         self.delta = delta
 
     def __call__(self, val_loss: float) -> None:
         score = -val_loss
 
-        if self.best_score is None:
+        if self.best_score == float("inf"):
             self.best_score = score
         elif score < self.best_score + self.delta:
             self.counter += 1

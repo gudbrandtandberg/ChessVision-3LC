@@ -13,6 +13,7 @@ import numpy as np
 import timm
 import torch
 import torch.nn.functional as F  # noqa: N812
+from numpy.typing import NDArray
 
 from .pytorch_unet.unet.unet_model import UNet
 from .types import BoardExtractionResult, ChessVisionResult, PositionResult
@@ -187,7 +188,7 @@ class ChessVision:
         """Initialize the board extraction model."""
         logger.info("Initializing board extraction model...")
         self._board_extractor = UNet(n_channels=3, n_classes=1)
-        self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)
+        self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)  # type: ignore
         self._board_extractor = self.load_model_checkpoint(
             self._board_extractor,
             self._board_extractor_weights,
@@ -206,7 +207,7 @@ class ChessVision:
 
     def process_image(
         self,
-        image: np.ndarray,
+        image: NDArray[np.uint8],
         threshold: float = 0.5,
         flip: bool = False,
     ) -> ChessVisionResult:
@@ -240,7 +241,7 @@ class ChessVision:
 
     def extract_board(
         self,
-        image: np.ndarray,
+        image: NDArray[np.uint8],
         threshold: float = 0.5,
     ) -> BoardExtractionResult:
         """Extract chessboard from image.
@@ -268,7 +269,7 @@ class ChessVision:
 
     def classify_position(
         self,
-        board_image: np.ndarray,
+        board_image: NDArray[np.uint8],
         flip: bool = False,
     ) -> PositionResult:
         """Classify chess position from an extracted board image.
@@ -294,14 +295,14 @@ class ChessVision:
 
         # Process results
         predictions = predictions.detach().cpu().numpy()
-        probabilities = probabilities.detach().cpu().numpy()
+        probabilities_np = probabilities.detach().cpu().numpy()
 
-        return self.process_classifier_logits(predictions, probabilities, square_names, squares)
+        return self.process_classifier_logits(predictions, probabilities_np, square_names, squares)
 
     @staticmethod
     def process_board_extraction_logits(
-        logits: np.ndarray,
-        orig_image: np.ndarray,
+        logits: NDArray[np.float32],
+        orig_image: NDArray[np.uint8],
         threshold: float,
     ) -> BoardExtractionResult:
         """Process board extraction logits without requiring model initialization.
@@ -331,10 +332,6 @@ class ChessVision:
                 probabilities=probabilities,
                 binary_mask=binary_mask,
                 quadrangle=None,
-                confidence_scores={
-                    "mask_mean": float(probabilities.mean()),
-                    "mask_max": float(probabilities.max()),
-                },
             )
 
         # Scale quadrangle to original image size
@@ -356,10 +353,10 @@ class ChessVision:
 
     @staticmethod
     def process_classifier_logits(
-        predictions: np.ndarray,
-        probabilities: np.ndarray,
+        predictions: NDArray[np.float32],
+        probabilities: NDArray[np.float32],
         square_names: list[str],
-        squares: np.ndarray,
+        squares: NDArray[np.uint8],
     ) -> PositionResult:
         """Process classifier logits without requiring model initialization.
 
@@ -392,13 +389,13 @@ class ChessVision:
         return PositionResult(
             fen=board.board_fen(promoted=False),
             predictions=predictions,
-            squares=squares,
+            squares=squares.tolist(),
             square_names=square_names,
             confidence_scores=confidence_scores,
         )
 
     @staticmethod
-    def _create_binary_mask(mask: np.ndarray, threshold: float = 0.5) -> np.ndarray:
+    def _create_binary_mask(mask: NDArray[np.uint8], threshold: float = 0.5) -> NDArray[np.uint8]:
         """Convert probability mask to binary mask."""
         mask = mask.copy()  # Create a copy to avoid modifying the original
         mask[mask > threshold] = 255
@@ -406,7 +403,7 @@ class ChessVision:
         return mask.astype(np.uint8)
 
     @staticmethod
-    def _find_quadrangle(mask: np.ndarray) -> np.ndarray | None:
+    def _find_quadrangle(mask: NDArray[np.uint8]) -> NDArray[np.uint32] | None:
         """Find a quadrangle (4-sided polygon) in a binary mask."""
         contours, _ = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_TC89_KCOS)
 
@@ -429,11 +426,11 @@ class ChessVision:
     @staticmethod
     def _filter_contours(
         img_shape: tuple[int, int],
-        contours: list[np.ndarray],
+        contours: list[NDArray[np.int32]],
         min_ratio_bounding: float = 0.6,
         min_area_percentage: float = 0.35,
         max_area_percentage: float = 1.0,
-    ) -> list[np.ndarray]:
+    ) -> list[NDArray[np.int32]]:
         """Filter contours based on area and aspect ratio criteria."""
         filtered = []
         mask_area = float(img_shape[0] * img_shape[1])
@@ -452,24 +449,24 @@ class ChessVision:
         return filtered
 
     @staticmethod
-    def _rotate_quadrangle(approx: np.ndarray) -> np.ndarray:
+    def _rotate_quadrangle(approx: NDArray[np.int32]) -> NDArray[np.int32]:
         """Rotate quadrangle to ensure consistent orientation."""
         if approx[0, 0, 0] < approx[2, 0, 0]:
             approx = approx[[3, 0, 1, 2], :, :]
         return approx
 
     @staticmethod
-    def _scale_quadrangle(approx: np.ndarray, orig_size: tuple[int, int]) -> np.ndarray:
+    def _scale_quadrangle(approx: NDArray[np.int32], orig_size: tuple[int, int]) -> NDArray[np.uint32]:
         """Scale quadrangle approximation to match original image size."""
         sf = orig_size[0] / 256.0
         return np.array(approx * sf, dtype=np.uint32)
 
     @staticmethod
     def _extract_perspective(
-        image: np.ndarray,
-        approx: np.ndarray,
+        image: NDArray[np.uint8],
+        approx: NDArray[np.uint8],
         out_size: tuple[int, int],
-    ) -> np.ndarray:
+    ) -> NDArray[np.uint8]:
         """Extract a perspective-corrected region from an image."""
         w, h = out_size[0], out_size[1]
         dest = np.array(((0, 0), (w, 0), (w, h), (0, h)), np.float32)
@@ -480,9 +477,9 @@ class ChessVision:
 
     @staticmethod
     def _extract_squares(
-        board: np.ndarray,
+        board: NDArray[np.uint8],
         flip: bool = False,
-    ) -> tuple[np.ndarray, list[str]]:
+    ) -> tuple[NDArray[np.uint8], list[str]]:
         """Extract individual squares from board image.
 
         Args:
@@ -525,7 +522,7 @@ class ChessVision:
     @staticmethod
     def _validate_position(
         pred_labels: list[str],
-        probabilities: np.ndarray,
+        probabilities: NDArray[np.float32],
         square_names: list[str],
     ) -> list[str]:
         """Apply chess logic to validate and fix predictions.
@@ -588,7 +585,7 @@ class ChessVision:
         Returns:
             ResNet18 model configured for chess piece classification
         """
-        return timm.create_model(ChessVision.MODEL_ID, num_classes=ChessVision.NUM_CLASSES, in_chans=1)
+        return timm.create_model(ChessVision.MODEL_ID, num_classes=ChessVision.NUM_CLASSES, in_chans=1)  # type: ignore
 
     @classmethod
     def load_model_checkpoint(

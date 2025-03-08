@@ -269,7 +269,7 @@ def train_model(
     patience_counter = 0
 
     # Set model memory format
-    model = model.to(memory_format=torch.channels_last)
+    model = model.to(memory_format=torch.channels_last)  # type: ignore
 
     # Calculate validation interval based on epochs rather than steps
     total_steps = n_train // batch_size
@@ -502,7 +502,7 @@ if __name__ == "__main__":
     device = ChessVision.get_device()
     logging.info(f"Using device {device}")
 
-    model = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
+    model: torch.nn.Module = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
     model.to(device=device)
 
     logging.info(
