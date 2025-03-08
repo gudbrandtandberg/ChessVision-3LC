@@ -14,3 +14,4 @@ tomli
 torchinfo
 cairosvg
 git+https://github.com/3lc-ai/ultralytics.git
+pytest
