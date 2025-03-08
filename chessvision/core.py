@@ -188,7 +188,9 @@ class ChessVision:
         self._board_extractor = UNet(n_channels=3, n_classes=1)
         self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)
         self._board_extractor = self.load_model_checkpoint(
-            self._board_extractor, self._board_extractor_weights, self.device,
+            self._board_extractor,
+            self._board_extractor_weights,
+            self.device,
         )
         self._board_extractor.eval()
         self._board_extractor.to(self.device)
@@ -431,7 +433,7 @@ class ChessVision:
 
     @staticmethod
     def _filter_contours(
-        img_shape: Tuple[int, int],
+        img_shape: tuple[int, int],
         contours: list[np.ndarray],
         min_ratio_bounding: float = 0.6,
         min_area_percentage: float = 0.35,
@@ -591,8 +593,7 @@ class ChessVision:
         Returns:
             ResNet18 model configured for chess piece classification
         """
-        model = timm.create_model(ChessVision.MODEL_ID, num_classes=ChessVision.NUM_CLASSES, in_chans=1)
-        return model
+        return timm.create_model(ChessVision.MODEL_ID, num_classes=ChessVision.NUM_CLASSES, in_chans=1)
 
     @classmethod
     def load_model_checkpoint(

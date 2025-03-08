@@ -151,6 +151,11 @@ module = ["chessvision.pytorch_unet.*"]
 ignore_missing_imports = true
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = ["tlc.*"]
+ignore_missing_imports = true
+ignore_errors = true
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-ra -q --cov=chessvision"
