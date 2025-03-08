@@ -70,24 +70,30 @@ python examples/detailed-example.py
 See launch configurations in `.vscode/launch.json` for training the models and
 running the web application.
 
-## ChessVision Pipeline
+## The ChessVision Solution
 
-- The chessvision solution: (see old repo README for details):
-  - segmentation
-  - thresholding
-  - contour detection and filtering
-  - chessboard extraction (from detected quad contour)
-  - piece extraction
-  - piece classification
-  - position logic
-  - final position output (FEN string)
+The chessvision solution consists of several steps:
 
-- Original datasets: chessboard_segmentation, piece_classification, and test. Checked in to the repo.
-- A practically endless supply of new data, collected through a friends chess app.
+1. Board detection using a UNet model to segment the chessboard from the background
+2. Contour detection and filtering to identify the chessboard boundaries
+3. Perspective transform to extract the chessboard
+4. Individual square extraction
+5. CNN-based piece classification
+6. Chess position validation and final output (FEN string)
 
-Pipelines for processing the new data: ...
+For more details on the original approach, see the [old README](https://github.com/gudbrandtandberg/ChessVision?tab=readme-ov-file#algorithm-details)
 
-## 3LC
+## Datasets
+
+The repo comes with three original datasets checked in:
+
+- `board_extraction`: A dataset of chessboard images with annotated segmentation masks.
+- `squaresn`: A dataset of chess piece images with annotated classification labels.
+- `test`: A set of test images and ground truth files for evaluating the model.
+
+In addition, there is a practically endless supply of new data collected through a friend's chess app, which I have in a private S3 bucket.
+
+## 3LC and the ML Lifecycle
 
 ![ChessVision Pipeline](examples/screenshots/embeddings.png)
 
@@ -98,5 +104,3 @@ Pipelines for processing the new data: ...
 ![ChessVision Pipeline](examples/screenshots/run_overview.png)
 
 ![ChessVision Pipeline](examples/screenshots/test_results.png)
-
-
