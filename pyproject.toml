@@ -34,6 +34,7 @@ dependencies = [
     "cairosvg",
     "numpy>=1.24.0",
     "tqdm",
+    "flask>=3.1.0",
 ]
 
 [project.optional-dependencies]

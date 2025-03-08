@@ -14,3 +14,6 @@ yolo*.pt
 app/computeroot/logs/cv_endpoint.log
 data/new_raw/
 .coverage
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
