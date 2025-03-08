@@ -192,7 +192,7 @@ def classify_image():
     global cv_model
 
     if cv_model is None:
-        cv_model = load_models()
+        cv_model = ChessVision(lazy_load=False)
 
     # Get the image from the POST request
     if "image" not in request.files:
@@ -298,6 +298,6 @@ if __name__ == "__main__":
 
     os.environ["LOCAL"] = "1" if args.local else "0"
     port = 7777 if args.local else 8080
-    cv_model = load_models()
+    cv_model = ChessVision(lazy_load=False)
 
     app.run(host="127.0.0.1", port=port)

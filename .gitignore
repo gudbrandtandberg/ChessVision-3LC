@@ -13,3 +13,4 @@ yolo_output/
 yolo*.pt
 app/computeroot/logs/cv_endpoint.log
 data/new_raw/
+.coverage
