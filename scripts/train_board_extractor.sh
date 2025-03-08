@@ -22,7 +22,7 @@ TRAIN_DATASET_NAME="chessboard-segmentation-train"
 VAL_DATASET_NAME="chessboard-segmentation-val"
 TRAIN_TABLE_NAME="table"
 VAL_TABLE_NAME="table"
-RUN_DESCRIPTION=""
+RUN_DESCRIPTION="TEST_DELETE_ME"
 SWEEP_ID=0
 
 # ======================

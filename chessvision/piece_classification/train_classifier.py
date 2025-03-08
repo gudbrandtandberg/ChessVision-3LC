@@ -14,13 +14,13 @@ import torchvision.transforms as transforms
 import tqdm
 from torch.utils.data import DataLoader
 
+from chessvision.core import ChessVision
 from chessvision.piece_classification.training_utils import EarlyStopping
-from chessvision.utils import DATA_ROOT, get_device, label_names
 
 mp.set_start_method("spawn", force=True)
 
 
-DATASET_ROOT = f"{DATA_ROOT}/squares"
+DATASET_ROOT = f"{ChessVision.DATA_ROOT}/squares"
 tlc.register_url_alias("CHESSPIECES_DATASET_ROOT", DATASET_ROOT)
 tlc.register_url_alias("PROJECT_ROOT", str(tlc.Configuration.instance().project_root_url))
 
@@ -31,7 +31,7 @@ TRAIN_DATASET_NAME = "chesspieces-train"
 VAL_DATASET_NAME = "chesspieces-val"
 
 # Hyperparameters
-NUM_CLASSES = 13
+NUM_CLASSES = ChessVision.NUM_CLASSES
 BATCH_SIZE = 32
 INITIAL_LR = 0.001
 LR_SCHEDULER_STEP_SIZE = 4
@@ -39,7 +39,7 @@ LR_SCHEDULER_GAMMA = 0.1
 MAX_EPOCHS = 10
 EARLY_STOPPING_PATIENCE = 4
 HIDDEN_LAYER_INDEX = 90
-MODEL_ID = "resnet18"
+MODEL_ID = ChessVision.MODEL_ID
 
 train_transforms = transforms.Compose(
     [
@@ -73,7 +73,7 @@ def val_map(sample):
 train_dataset = datasets.ImageFolder(TRAIN_DATASET_PATH)
 val_dataset = datasets.ImageFolder(VAL_DATASET_PATH)
 
-sample_structure = (tlc.PILImage("image"), tlc.CategoricalLabel("label", classes=label_names))
+sample_structure = (tlc.PILImage("image"), tlc.CategoricalLabel("label", classes=ChessVision.LABEL_NAMES))
 
 
 def train(
@@ -125,7 +125,7 @@ def validate(model, val_loader, criterion, device):
 
 
 def load_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer | None = None, filename="checkpoint.pth"):
-    device = get_device()
+    device = ChessVision.get_device()
     checkpoint = torch.load(filename, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     if optimizer is not None:
@@ -152,7 +152,7 @@ def main(args):
     # Training variables
     start = time.time()
     early_stopping = EarlyStopping(patience=EARLY_STOPPING_PATIENCE, verbose=True)
-    device = get_device()
+    device = ChessVision.get_device()
     model = get_classifier_model()
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -241,7 +241,7 @@ def main(args):
         "batch_size": 512,
     }
     chessvision_metrics_collector = tlc.ClassificationMetricsCollector(
-        classes=label_names,
+        classes=ChessVision.LABEL_NAMES,
     )
 
     metrics_collectors = [
@@ -350,6 +350,7 @@ def main(args):
 
 
 def get_classifier_model():
+    """Initialize the piece classifier model."""
     model = timm.create_model(MODEL_ID, num_classes=NUM_CLASSES, in_chans=1)
     return model
 

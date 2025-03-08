@@ -18,13 +18,12 @@ from torchvision import transforms as T
 from tqdm import tqdm
 
 from chessvision.board_extraction.loss_collector import LossCollector
-from chessvision.predict.classify_raw import load_extractor_checkpoint
+from chessvision.core import ChessVision
 from chessvision.pytorch_unet.evaluate import evaluate
 from chessvision.pytorch_unet.unet import UNet
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
-from chessvision.utils import DATA_ROOT, best_extractor_weights, get_device, segmentation_map
 
-DATASET_ROOT = f"{DATA_ROOT}/board_extraction"
+DATASET_ROOT = f"{ChessVision.DATA_ROOT}/board_extraction"
 tlc.register_url_alias(
     "CHESSVISION_SEGMENTATION_DATA_ROOT",
     DATASET_ROOT,
@@ -378,8 +377,8 @@ def train_model(
             collectors = [
                 LossCollector(),
                 tlc.SegmentationMetricsCollector(
-                    label_map=segmentation_map,
-                    preprocess_fn=PrepareModelOutputsForLogging(threshold=threshold),
+                    classes=ChessVision.SEGMENTATION_MAP,
+                    threshold=threshold,
                 ),
                 tlc.EmbeddingsMetricsCollector(layers=[52], reshape_strategy={52: "mean"}),
             ]
@@ -480,7 +479,7 @@ if __name__ == "__main__":
     if args.deterministic:
         set_deterministic_mode(args.seed)
 
-    device = get_device()
+    device = ChessVision.get_device()
     logging.info(f"Using device {device}")
 
     model = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
@@ -495,7 +494,7 @@ if __name__ == "__main__":
     )
 
     if args.load:
-        load_extractor_checkpoint(model, best_extractor_weights)
+        model = ChessVision.load_model_checkpoint(model, ChessVision.best_extractor_weights, device)
 
     run, checkpoint_path = train_model(
         model=model,
@@ -522,15 +521,14 @@ if __name__ == "__main__":
         val_dataset_name=args.val_dataset,
     )
 
-    # Remove timing code from main
+    # Run evaluation if requested
     if args.run_tests:
-        from chessvision.test import run_tests
+        from chessvision.evaluation.evaluate import evaluate_model
 
         del model
 
-        model = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
-        model = model.to(memory_format=torch.channels_last)
-        model = load_extractor_checkpoint(model, checkpoint_path)
-        model.to(device=device)
-
-        run_tests(run=run, extractor=model, threshold=args.threshold)
+        evaluate_model(
+            run=run,
+            threshold=args.threshold,
+            board_extractor_weights=str(checkpoint_path),
+        )

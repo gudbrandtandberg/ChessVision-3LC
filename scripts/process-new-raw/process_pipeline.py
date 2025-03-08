@@ -18,6 +18,7 @@ Example usage:
 """
 
 import argparse
+import io
 import logging
 import time
 from datetime import datetime, timedelta
@@ -25,6 +26,9 @@ from pathlib import Path
 from typing import Optional
 
 import boto3
+import cairosvg
+import chess
+import chess.svg
 import cv2
 import numpy as np
 import tlc
@@ -33,11 +37,7 @@ import torchvision.transforms.v2 as v2
 from PIL import Image
 from tqdm import tqdm
 
-from chessvision.predict.classify_board import classify_board
-from chessvision.predict.classify_raw import load_board_extractor, load_classifier
-from chessvision.predict.extract_board import BoardExtractor
-from chessvision.test.test import chessboard_to_pil_image
-from chessvision.utils import BOARD_SIZE, DATA_ROOT, segmentation_map
+from chessvision.core import ChessVision
 
 # Configure logging
 logging.basicConfig(
@@ -73,7 +73,7 @@ def download_raw_data(
 
     # Create output folder if not specified
     if output_folder is None:
-        output_folder = Path(DATA_ROOT) / "new_raw" / date_folder
+        output_folder = Path(ChessVision.DATA_ROOT) / "new_raw" / date_folder
     else:
         output_folder = output_folder / date_folder
 
@@ -169,7 +169,7 @@ def create_tlc_table(
         project_name=project_name,
         if_exists="overwrite",
         extra_columns={
-            "mask": tlc.SegmentationPILImage("mask", classes=segmentation_map),
+            "mask": tlc.SegmentationPILImage("mask", classes=ChessVision.SEGMENTATION_MAP),
         },
     )
 
@@ -181,7 +181,7 @@ def create_tlc_table(
 def enrich_tlc_table(
     table: tlc.Table,
     run_name: Optional[str] = None,
-    threshold: float = 0.3,
+    threshold: float = 0.5,
     embedding_layer: int = 52,
 ) -> str:
     """
@@ -206,10 +206,9 @@ def enrich_tlc_table(
     # Initialize 3LC run
     run = tlc.init(table.project_name, run_name)
 
-    # Load model and create board extractor
-    logger.info("Loading board extraction model")
-    model = load_board_extractor()
-    sq_model = load_classifier()
+    # Initialize ChessVision
+    logger.info("Initializing ChessVision")
+    chess_vision = ChessVision()
 
     # Define preprocessing function
     def preprocess_image(sample):
@@ -232,9 +231,6 @@ def enrich_tlc_table(
         logits = predictor_output.forward
         batch_size = logits.shape[0]
 
-        # Initialize board extractor once
-        board_extractor = BoardExtractor()
-
         # Initialize lists for metrics
         rendered_boards = []
         prob_images = []
@@ -249,39 +245,58 @@ def enrich_tlc_table(
             # Get original image
             orig_image = (batch[i].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
 
-            # Process logits directly - no redundant inference!
-            result = board_extractor.process_logits(logits[i].squeeze().cpu().numpy(), orig_image, threshold=threshold)
+            # Process logits
+            logits_np = logits[i].squeeze().cpu().numpy()
+            board_result = chess_vision.process_board_extraction_logits(logits_np, orig_image, threshold=threshold)
 
-            # Calculate additional metrics
-            quad_score = quadrangle_regularity(result.quadrangle)
-            completeness_score = mask_completeness(result.probabilities)
-            distribution_score = probability_distribution(result.probabilities)
-            confidence_score = probability_confidence(result.probabilities)
+            # Initialize all metrics with default values
+            quad_score = 0.0
+            completeness_score = 0.0
+            distribution_score = 0.0
+            confidence_score = 0.0
+            position_result = None
 
+            # Create default black images
+            black_image_gray = Image.open(ChessVision.BLACK_SQUARE_PATH)
+
+            # Process board if found
+            if board_result.board_image is not None:
+                # Get position classification
+                position_result = chess_vision.classify_position(board_result.board_image)
+
+                # Create board visualization
+                board = chess.Board(position_result.fen)
+                svg_data = chess.svg.board(board=board)
+
+                # Convert SVG to PIL Image
+
+                png_data = cairosvg.svg2png(bytestring=svg_data.encode())
+                board_image = Image.open(io.BytesIO(png_data))
+                board_image = board_image.resize(ChessVision.BOARD_SIZE)
+
+                # Add successful extraction results
+                rendered_boards.append(board_image)
+                extracted_boards.append(Image.fromarray(board_result.board_image))
+
+            else:
+                # Add default images for failed extraction
+                rendered_boards.append(black_image_gray)
+                extracted_boards.append(black_image_gray)
+
+            # Collect all metrics
+            quad_score = quadrangle_regularity(board_result.quadrangle)
+            completeness_score = mask_completeness(board_result.probabilities)
+            distribution_score = probability_distribution(board_result.probabilities)
+            confidence_score = probability_confidence(board_result.probabilities)
+
+            probs_np = (board_result.probabilities * 255).astype(np.uint8)
+
+            masks.append(Image.fromarray(board_result.binary_mask))
+            prob_images.append(Image.fromarray(probs_np, mode="L"))
             quadrangle_scores.append(quad_score)
             mask_completeness_scores.append(completeness_score)
             prob_distribution_scores.append(distribution_score)
             confidences.append(confidence_score)
-
-            # Process results
-            if result.board_image is not None:
-                pil_board = Image.fromarray(result.board_image)
-                extracted_boards.append(pil_board)
-                _, _, chessboard, _, _ = classify_board(result.board_image, sq_model, flip=False)
-                rendered_boards.append(chessboard_to_pil_image(chessboard))
-
-            else:
-                black_image = Image.new("L", BOARD_SIZE, color=0)
-                rendered_boards.append(black_image)
-                extracted_boards.append(black_image)
-
-            # Add binary mask
-            masks.append(Image.fromarray(result.binary_mask))
-
-            # Process probabilities
-            probs_np = (result.probabilities * 255).astype(np.uint8)
-            probs_image = Image.fromarray(probs_np, mode="L")
-            prob_images.append(probs_image)
 
         return {
             "extracted": extracted_boards,
@@ -302,7 +317,7 @@ def enrich_tlc_table(
         "distribution": tlc.Float("distribution"),
         "extracted": tlc.PILImage("extracted"),
         "probs": tlc.PILImage("probs"),
-        "predicted_mask": tlc.SegmentationPILImage("predicted_mask", classes=segmentation_map),
+        "predicted_mask": tlc.SegmentationPILImage("predicted_mask", classes=ChessVision.SEGMENTATION_MAP),
         "board": tlc.PILImage("board"),
     }
 
@@ -321,7 +336,7 @@ def enrich_tlc_table(
             embedding_collector,
         ],
         tlc.Predictor(
-            model,
+            chess_vision.board_extractor,
             layers=[embedding_layer],
             preprocess_fn=v2.Resize((256, 256), antialias=True),
         ),
@@ -458,7 +473,7 @@ def run_pipeline(
     project_name: str = "chessvision-new-raw",
     dataset_name: str = "chessvision-new-raw",
     run_name: Optional[str] = None,
-    threshold: float = 0.3,
+    threshold: float = 0.5,
     embedding_layer: int = 52,
     skip_download: bool = False,
     skip_create_table: bool = False,
@@ -506,7 +521,7 @@ def run_pipeline(
         logger.info("Skipping download step")
         if output_folder is None:
             date_folder = f"{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}"
-            download_folder = Path(DATA_ROOT) / "new_raw" / date_folder
+            download_folder = Path(ChessVision.DATA_ROOT) / "new_raw" / date_folder
         else:
             download_folder = output_folder
         results["download_folder"] = download_folder
@@ -600,7 +615,7 @@ def parse_arguments():
         "--threshold",
         help="Threshold for board extraction",
         type=float,
-        default=0.3,
+        default=0.5,
     )
     parser.add_argument(
         "--embedding_layer",

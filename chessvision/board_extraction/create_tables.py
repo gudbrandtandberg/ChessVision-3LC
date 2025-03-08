@@ -4,10 +4,10 @@ import tlc
 import torch
 from torch.utils.data import random_split
 
+from chessvision.core import ChessVision
 from chessvision.pytorch_unet.utils.data_loading import BasicDataset
-from chessvision.utils import DATA_ROOT
 
-DATASET_ROOT = f"{DATA_ROOT}/board_extraction"
+DATASET_ROOT = f"{ChessVision.DATA_ROOT}/board_extraction"
 tlc.register_url_alias(
     "CHESSVISION_SEGMENTATION_DATA_ROOT",
     DATASET_ROOT,
@@ -36,7 +36,7 @@ def create_tables():
 
     sample_structure = {
         "image": tlc.PILImage("image"),
-        "mask": tlc.SegmentationPILImage("mask", classes={0: "background", 255: "chessboard"}),
+        "mask": tlc.SegmentationPILImage("mask", classes=ChessVision.SEGMENTATION_MAP),
     }
 
     tlc_val_dataset = tlc.Table.from_torch_dataset(

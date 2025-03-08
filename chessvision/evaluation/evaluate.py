@@ -13,19 +13,11 @@ import torch
 from PIL import Image
 from tqdm import tqdm
 
-from chessvision.predict.classify_raw import classify_raw
-from chessvision.utils import (
-    BLACK_BOARD_URL,
-    BLACK_CROP,
-    DATA_ROOT,
-    labels,
-    listdir_nohidden,
-)
+from chessvision.core import ChessVision
 
-TEST_DATA_DIR = Path(DATA_ROOT) / "test"
-
+TEST_DATA_DIR = Path(ChessVision.DATA_ROOT) / "test"
 PROJECT_NAME = "chessvision-testing"
-LABEL_NAMES = ["f", "P", "p", "R", "r", "N", "n", "B", "b", "Q", "q", "K", "k"]
+LABEL_NAMES = ChessVision.LABEL_NAMES
 
 
 def accuracy(a, b):
@@ -48,7 +40,7 @@ def top_k_accuracy(predictions, true_labels, k=3):
     for i in range(64):
         for j in range(k):
             try:
-                _top_k = list(labels.keys())[top_k[i, j]]
+                _top_k = list(ChessVision.LABEL_INDICES.keys())[top_k[i, j]]
             except IndexError:
                 _top_k = "f"
             top_k_predictions[i, j] = _top_k
@@ -84,7 +76,7 @@ def vectorize_chessboard(board):
 
 
 def get_test_generator(image_dir: Path):
-    img_filenames = listdir_nohidden(image_dir)
+    img_filenames = ChessVision._listdir_nohidden(image_dir)
     test_imgs = np.array([cv2.imread(str(image_dir / x)) for x in img_filenames])
 
     for i in range(len(test_imgs)):
@@ -102,18 +94,41 @@ def save_svg(chessboard: chess.Board, path: Path):
     cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=str(path))
 
 
-def run_tests(
+def evaluate_model(
     image_folder: Path = TEST_DATA_DIR / "raw",
     truth_folder: Path = TEST_DATA_DIR / "ground_truth",
     run: tlc.Run | None = None,
-    extractor: torch.nn.Module | None = None,
-    classifier: torch.nn.Module | None = None,
     threshold: float = 0.5,
     project_name: str = PROJECT_NAME,
+    board_extractor_weights: str | None = None,
+    classifier_weights: str | None = None,
 ) -> tlc.Run:
-    """Run evaluation on test images."""
+    """Run evaluation on test images using the ChessVision model.
+
+    This script evaluates the ChessVision model on a test dataset, computing various
+    metrics including top-k accuracy, extraction success rate, and processing time.
+    Results are logged to a 3LC run for visualization and analysis.
+
+    Args:
+        image_folder: Directory containing test images
+        truth_folder: Directory containing ground truth labels
+        run: Optional 3LC run to log results to
+        threshold: Confidence threshold for board extraction
+        project_name: Name of the 3LC project
+        board_extractor_weights: Optional path to board extractor weights
+        classifier_weights: Optional path to classifier weights
+
+    Returns:
+        The 3LC run containing evaluation results
+    """
     if not run:
         run = tlc.init(project_name)
+
+    # Initialize ChessVision model with optional weights
+    cv = ChessVision(
+        board_extractor_weights=board_extractor_weights,
+        classifier_weights=classifier_weights,
+    )
 
     # Set up metrics writer
     metrics_writer = tlc.MetricsTableWriter(
@@ -135,41 +150,32 @@ def run_tests(
     top_3_accuracy = 0.0
 
     times = []
-    test_set_size = len(listdir_nohidden(image_folder))
+    test_set_size = len(ChessVision._listdir_nohidden(image_folder))
     extraction_failures = 0
 
     with tlc.bulk_data_url_context(run.bulk_data_url, metrics_writer.url):
-        for index, (filename, img) in tqdm(enumerate(data_generator), total=test_set_size, desc="Classifying images"):
-            start = time.time()
-            board_img, mask, predictions, chessboard, _, squares, _ = classify_raw(
-                img,
-                filename,
-                extractor,
-                classifier,
-                threshold=threshold,
-            )
-
-            stop = time.time()
-            times.append(stop - start)
+        for index, (filename, img) in tqdm(enumerate(data_generator), total=test_set_size, desc="Evaluating images"):
+            result = cv.process_image(img)
+            times.append(result.processing_time)
 
             # Save the predicted mask
             predicted_mask_url = Path((run.bulk_data_url / "predicted_masks" / (filename[:-4] + ".png")).to_str())
             predicted_mask_url.parent.mkdir(parents=True, exist_ok=True)
-            Image.fromarray(mask).save(predicted_mask_url)
+            Image.fromarray(result.board_extraction.binary_mask).save(predicted_mask_url)
 
-            if board_img is None:
+            if result.position is None:
                 print(f"Failed to classify {filename}")
                 extraction_failures += 1
 
                 metrics_batch = {
                     "raw_img": [str(image_folder / filename)],
                     "predicted_masks": [str(predicted_mask_url)],
-                    "extracted_board": [BLACK_BOARD_URL],
+                    "extracted_board": [str(ChessVision.BLACK_BOARD_PATH)],
                     "rendered_board": [""],
                     "example_id": [index],
                     "is_failed": [True],
                     "accuracy": [0.0],
-                    "square_crop": [BLACK_CROP],
+                    "square_crop": [ChessVision.BLACK_SQUARE_PATH],
                     "true_labels": [0],
                     "predicted_labels": [0],
                 }
@@ -180,7 +186,7 @@ def run_tests(
             # Save the extracted board
             extracted_board_url = Path((run.bulk_data_url / "extracted_board" / (filename[:-4] + ".png")).to_str())
             extracted_board_url.parent.mkdir(parents=True, exist_ok=True)
-            Image.fromarray(board_img).save(extracted_board_url)
+            Image.fromarray(result.board_extraction.board_image).save(extracted_board_url)
 
             # Load the true labels
             truth_file = truth_folder / (filename[:-4] + ".txt")
@@ -192,20 +198,22 @@ def run_tests(
             true_labels_int = [LABEL_NAMES.index(label) for label in true_labels]
 
             # Compute the accuracy
+            predictions = result.position.predictions
             top_1, top_2, top_3 = top_k_accuracy(predictions, true_labels, k=3)
             top_1_accuracy += top_1
             top_2_accuracy += top_2
             top_3_accuracy += top_3
 
             # Register the predicted labels
-            predicted_labels = vectorize_chessboard(chessboard)
+            board = chess.Board(result.position.fen)
+            predicted_labels = vectorize_chessboard(board)
             predicted_labels = snake(predicted_labels)
             predicted_labels_int = [LABEL_NAMES.index(label) for label in predicted_labels]
 
             # Write and register a rendered board image
             svg_url = Path((run.bulk_data_url / "rendered_board" / (filename[:-4] + ".png")).to_str())
             svg_url.parent.mkdir(parents=True, exist_ok=True)
-            save_svg(chessboard, svg_url)
+            save_svg(board, svg_url)
 
             metrics_batch = {
                 "raw_img": [str(image_folder / filename)] * 64,
@@ -213,7 +221,7 @@ def run_tests(
                 "extracted_board": [str(extracted_board_url)] * 64,
                 "rendered_board": [str(svg_url)] * 64,
                 "accuracy": [top_1] * 64,
-                "square_crop": [Image.fromarray(img.squeeze()) for img in squares],
+                "square_crop": [Image.fromarray(img.squeeze()) for img in result.position.squares],
                 "true_labels": true_labels_int,
                 "predicted_labels": predicted_labels_int,
                 "example_id": [index] * 64,
@@ -232,6 +240,8 @@ def run_tests(
         "top_3_accuracy": f"{top_3_accuracy: .3f}",
         "avg_time_per_prediction": sum(times) / test_set_size,
         "extraction_failures": extraction_failures,
+        "board_extractor_weights": cv._board_extractor_weights,
+        "classifier_weights": cv._classifier_weights,
     }
 
     run.set_parameters(
@@ -241,7 +251,7 @@ def run_tests(
         }
     )
 
-    print(f"Classified {test_set_size} raw images")
+    print(f"Evaluated {test_set_size} raw images")
     metrics_table = metrics_writer.finalize()
     run.add_metrics_table(metrics_table)
     run.set_status_completed()
@@ -249,28 +259,32 @@ def run_tests(
 
 
 def parse_args():
-    argparser = argparse.ArgumentParser()
-    argparser.add_argument("--image-folder", type=str, default=str(TEST_DATA_DIR / "raw"))
-    argparser.add_argument("--truth-folder", type=str, default=str(TEST_DATA_DIR / "ground_truth"))
-    argparser.add_argument("--threshold", type=float, default=0.5)
-    argparser.add_argument("--project-name", type=str, default="chessvision-testing")
+    parser = argparse.ArgumentParser(description="Evaluate ChessVision model on test dataset")
+    parser.add_argument("--image-folder", type=str, default=str(TEST_DATA_DIR / "raw"))
+    parser.add_argument("--truth-folder", type=str, default=str(TEST_DATA_DIR / "ground_truth"))
+    parser.add_argument("--threshold", type=float, default=0.5)
+    parser.add_argument("--project-name", type=str, default="chessvision-testing")
+    parser.add_argument("--board-extractor-weights", type=str, help="Path to board extractor weights")
+    parser.add_argument("--classifier-weights", type=str, help="Path to classifier weights")
 
-    return argparser.parse_args()
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    print("Running ChessVision test suite...")
+    print("Running ChessVision evaluation...")
     args = parse_args()
     start = time.time()
 
-    run = run_tests(
+    run = evaluate_model(
         image_folder=Path(args.image_folder),
         truth_folder=Path(args.truth_folder),
         project_name=args.project_name,
         threshold=args.threshold,
+        board_extractor_weights=args.board_extractor_weights,
+        classifier_weights=args.classifier_weights,
     )
     stop = time.time()
-    print(f"Tests completed in {stop - start:.1f}s")
+    print(f"Evaluation completed in {stop - start:.1f}s")
     if "test_results" in run.constants["parameters"]:
         print("Test accuracy: {}".format(run.constants["parameters"]["test_results"]["top_1_accuracy"]))
         print("Top-2 accuracy: {}".format(run.constants["parameters"]["test_results"]["top_2_accuracy"]))

@@ -12,19 +12,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
+import torch.nn.functional as F
 
-from chessvision.predict.classify_board import classify_board
-from chessvision.predict.classify_raw import get_classifier_model, load_classifier_checkpoint, load_extractor_checkpoint
-from chessvision.predict.extract_board import extract_board
-from chessvision.pytorch_unet.unet.unet_model import UNet
-from chessvision.utils import (
-    DATA_ROOT,
-    INPUT_SIZE,
-    best_classifier_weights,
-    best_extractor_weights,
-    get_device,
-    label_names,
-)
+from chessvision.core import ChessVision
 
 
 def print_tensor_info(name, tensor):
@@ -35,86 +25,22 @@ def print_tensor_info(name, tensor):
         print(f"  Device: {tensor.device}")
         print(f"  Dtype: {tensor.dtype}")
         print(f"  Value range: [{tensor.min():.3f}, {tensor.max():.3f}]")
+        if tensor.dtype in [torch.float32, torch.float64]:
+            print(f"  Mean: {tensor.mean():.3f}")
+            print(f"  Std: {tensor.std():.3f}")
     elif isinstance(tensor, np.ndarray):
         print(f"{name}:")
         print(f"  Shape: {tensor.shape}")
         print(f"  Dtype: {tensor.dtype}")
         print(f"  Value range: [{tensor.min():.3f}, {tensor.max():.3f}]")
+        if tensor.dtype in [np.float32, np.float64]:
+            print(f"  Mean: {tensor.mean():.3f}")
+            print(f"  Std: {tensor.std():.3f}")
 
 
-def main():
-    flip = False  # Wether the board is shown from the white side
-    threshold = 0.3  # Threshold for the board extraction
-
-    device = get_device()
-    print(f"Using device: {device}")
-
-    # 1. Load Models
-    print("\n=== Loading Models ===")
-
-    # Load board extractor (UNet)
-    print("\nInitializing UNet for board extraction...")
-    extractor = UNet(n_channels=3, n_classes=1)
-    extractor = extractor.to(memory_format=torch.channels_last)
-    extractor = load_extractor_checkpoint(extractor, best_extractor_weights)
-    print("Using extractor weights: ", best_extractor_weights)
-    extractor.eval()
-    extractor.to(device)
-    print(f"Total parameters: {sum(p.numel() for p in extractor.parameters()):,}")
-
-    # Load classifier
-    print("\nInitializing classifier...")
-    classifier = get_classifier_model()
-    classifier, _, _, _ = load_classifier_checkpoint(classifier, None, best_classifier_weights)
-    print("Using classifier weights: ", best_classifier_weights)
-    classifier.eval()
-    classifier.to(device)
-    print(f"Total parameters: {sum(p.numel() for p in classifier.parameters()):,}")
-
-    # 2. Load and Process Image
-    print("\n=== Image Loading and Preprocessing ===")
-    test_image_path = Path(DATA_ROOT) / "test" / "raw" / "3cb7e9ca-0549-4072-a0ef-ae5ea82174e6.JPG"
-    print(f"Loading image: {test_image_path}")
-
-    original_img = cv2.imread(str(test_image_path))
-    print(f"Original image shape: {original_img.shape}")
-
-    comp_image = cv2.resize(original_img, INPUT_SIZE, interpolation=cv2.INTER_AREA)
-    print(f"Resized image shape: {comp_image.shape}")
-
-    # 3. Board Extraction
-    print("\n=== Board Extraction ===")
-    try:
-        board_img, mask = extract_board(comp_image, original_img, extractor, threshold=threshold)
-        if board_img is None:
-            print("Failed to extract board!")
-            return
-
-        print(f"Segmentation mask shape: {mask.shape}")
-        print(f"Extracted board shape: {board_img.shape}")
-
-    except Exception as e:
-        print(f"Error during board extraction: {e}")
-        return
-
-    # 4. Square Classification
-    print("\n=== Square Classification ===")
-    fen, predictions, _, squares, _ = classify_board(board_img, classifier, flip=flip)
-
-    print(f"Number of squares extracted: {len(squares)}")
-    print("\nFirst row predictions:")
-    for i, pred in enumerate(predictions[:8]):
-        confidence = torch.softmax(torch.tensor(pred), dim=0).max().item()
-        piece_name = label_names[np.argmax(pred)]
-        print(f"  Square {chr(97 + i)}8: {piece_name:12} (confidence: {confidence:.2%})")
-
-    # 5. Final Results
-    print("\n=== Final Results ===")
-    print(f"Generated FEN: {fen}")
-
-    # Print board in ASCII
-    print("\nDetected position:")
-    rows = fen.split("/")[:-1]  # Exclude the last part with move information
+def print_board_ascii(fen: str):
+    """Print chess board in ASCII format."""
+    rows = fen.split("/")
     print("  +-----------------+")
     for row in rows:
         board_row = " |"
@@ -125,6 +51,71 @@ def main():
                 board_row += f" {char}"
         print(board_row + " |")
     print("  +-----------------+")
+
+
+def main():
+    flip = False  # Whether the board is shown from the white side
+    threshold = 0.5  # Threshold for the board extraction
+
+    device = ChessVision.get_device()
+    print(f"Using device: {device}")
+
+    # 1. Initialize ChessVision
+    print("\n=== Initializing ChessVision ===")
+    chess_vision = ChessVision()
+
+    # Print model information
+    print("\nBoard Extractor (UNet):")
+    print(f"Total parameters: {sum(p.numel() for p in chess_vision.board_extractor.parameters()):,}")
+
+    print("\nPiece Classifier:")
+    print(f"Total parameters: {sum(p.numel() for p in chess_vision.classifier.parameters()):,}")
+
+    # 2. Load and Process Image
+    print("\n=== Image Loading and Preprocessing ===")
+    test_image_path = Path(ChessVision.DATA_ROOT) / "test" / "raw" / "3cb7e9ca-0549-4072-a0ef-ae5ea82174e6.JPG"
+    print(f"Loading image: {test_image_path}")
+
+    original_img = cv2.imread(str(test_image_path))
+    print_tensor_info("Original image", original_img)
+
+    # 3. Process Image
+    print("\n=== Processing Image ===")
+    result = chess_vision.process_image(original_img, threshold=threshold, flip=flip)
+
+    # Print detailed information about each stage
+    print("\nBoard Extraction Results:")
+    print(f"Processing time: {result.processing_time:.3f} seconds")
+
+    if result.board_extraction.board_image is not None:
+        print_tensor_info("Extracted board", result.board_extraction.board_image)
+        print_tensor_info("Binary mask", result.board_extraction.binary_mask)
+
+        if result.position:
+            print("\nPosition Analysis:")
+            print(f"FEN: {result.position.fen}")
+            print("\nSquare Confidence Scores:")
+            for square, confidence in result.position.confidence_scores.items():
+                print(f"  {square}: {confidence:.2%}")
+
+            print("\nPredicted Position:")
+            print_board_ascii(result.position.fen)
+
+            # Show detailed predictions for first row
+            print("\nDetailed First Row Analysis:")
+            first_row_indices = range(0, 8)  # a8 to h8
+            for i in first_row_indices:
+                square_name = result.position.square_names[i]
+                predictions = result.position.predictions[i]
+                probabilities = F.softmax(torch.tensor(predictions), dim=0)
+                top_k = torch.topk(probabilities, k=3)
+
+                print(f"\n{square_name}:")
+                for prob, idx in zip(top_k.values, top_k.indices):
+                    piece = ChessVision.LABEL_NAMES[idx]
+                    print(f"  {piece:2}: {prob:.2%}")
+    else:
+        print("No board detected in image!")
 
 
 if __name__ == "__main__":
