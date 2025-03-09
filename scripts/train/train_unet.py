@@ -205,7 +205,7 @@ def train_model(
         LossCollector(),
         tlc.SegmentationMetricsCollector(
             label_map=ChessVision.SEGMENTATION_MAP,
-            preprocess_fn=T.Resize((256, 256)),
+            preprocess_fn=PrepareModelOutputsForLogging(threshold=threshold),
         ),
         tlc.EmbeddingsMetricsCollector(layers=[52]),
     ]
