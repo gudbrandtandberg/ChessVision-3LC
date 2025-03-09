@@ -12,7 +12,7 @@ VAL_DATASET_NAME="chessboard-segmentation-val"
 TRAIN_TABLE_NAME="table"
 VAL_TABLE_NAME="table"
 
-source .venv-dev/Scripts/activate
+source .venv/Scripts/activate
 
 # Function to run a training job
 run_training() {

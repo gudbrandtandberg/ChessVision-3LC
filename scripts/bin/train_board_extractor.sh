@@ -28,7 +28,7 @@ SWEEP_ID=0
 # ======================
 # Activate Environment
 # ======================
-source .venv-dev/Scripts/activate
+source .venv/Scripts/activate
 
 # ======================
 # Run Training
