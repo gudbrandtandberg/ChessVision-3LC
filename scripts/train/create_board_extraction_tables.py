@@ -17,17 +17,15 @@ tlc.register_url_alias(
     f"{tlc.Configuration.instance().project_root_url}/chessvision-segmentation",
 )
 
-val_percent = 0.1
 dir_img = Path(DATASET_ROOT) / "images/"
 dir_mask = Path(DATASET_ROOT) / "masks/"
 assert dir_img.exists()
 assert dir_mask.exists()
-scale = 1.0
 
 
-def create_tables() -> tuple[tlc.Table, tlc.Table]:
+def create_tables(val_percent: float = 0.1) -> dict[str, tlc.Table]:
     # 1. Create dataset
-    dataset = BasicDataset(dir_img.as_posix(), dir_mask.as_posix(), scale)
+    dataset = BasicDataset(dir_img.as_posix(), dir_mask.as_posix(), scale=1.0)
 
     # 2. Split into train / validation partitions
     n_val = int(len(dataset) * val_percent)
@@ -53,7 +51,10 @@ def create_tables() -> tuple[tlc.Table, tlc.Table]:
         if_exists="reuse",
     )
 
-    return tlc_val_dataset, tlc_train_dataset
+    return {
+        "val": tlc_val_dataset,
+        "train": tlc_train_dataset,
+    }
 
 
 if __name__ == "__main__":

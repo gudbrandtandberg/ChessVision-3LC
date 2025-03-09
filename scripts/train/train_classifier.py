@@ -11,7 +11,6 @@ import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
-import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 import tqdm
 from PIL.Image import Image
@@ -203,33 +202,29 @@ def main(args: argparse.Namespace) -> None:
     checkpoint_path.make_parents(True)
 
     # Create datasets
-    tlc_train_dataset = (
-        tlc.Table.from_torch_dataset(
-            dataset=train_dataset,
+    try:
+        # Try to get existing tables
+        tlc_train_dataset = tlc.Table.from_names(
+            table_name=args.train_table,
             dataset_name=TRAIN_DATASET_NAME,
-            table_name="train",
-            structure=sample_structure,
             project_name=args.project_name,
-        )
-        .map(train_map)
-        .map_collect_metrics(val_map)
-        .revision()
-    )
+        ).revision()
 
-    tlc_val_dataset = (
-        tlc.Table.from_torch_dataset(
-            dataset=val_dataset,
+        tlc_val_dataset = tlc.Table.from_names(
+            table_name=args.val_table,
             dataset_name=VAL_DATASET_NAME,
-            table_name="val",
-            structure=sample_structure,
             project_name=args.project_name,
-        )
-        .map(val_map)
-        .revision()
-    )
+        ).revision()
 
-    logger.info(f"Using training dataset: {tlc_train_dataset.url}")
-    logger.info(f"Using validation dataset: {tlc_val_dataset.url}")
+        logger.info(f"Using existing tables:")
+        logger.info(f"Training: {tlc_train_dataset.url}")
+        logger.info(f"Validation: {tlc_val_dataset.url}")
+    except tlc.TableNotFoundError:
+        # Create new tables if they don't exist
+        logger.info("Tables not found, creating new ones...")
+        from .create_classification_tables import create_tables
+
+        tlc_train_dataset, tlc_val_dataset = create_tables(args.project_name)
 
     # Create data loaders
     sampler = tlc_train_dataset.create_sampler() if args.use_sample_weights else None
@@ -375,5 +370,7 @@ if __name__ == "__main__":
     argparser.add_argument("--resume", action="store_true")
     argparser.add_argument("--run-tests", action="store_true")
     argparser.add_argument("--use-sample-weights", action="store_true")
+    argparser.add_argument("--train-table", type=str, default="")
+    argparser.add_argument("--val-table", type=str, default="")
     args = argparser.parse_args()
     main(args)
