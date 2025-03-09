@@ -149,7 +149,7 @@ def test_compute_position_metrics_with_errors():
 
     # Make some intentional mistakes:
     # - Confuse knights with bishops (second most likely)
-    # - Confuse pawns with empty squares
+    # - Confuse pawns with empty squares (third most likely)
     board = chess.Board(true_fen + " w KQkq - 0 1")
     true_labels = board_to_labels(board)
 
@@ -157,8 +157,10 @@ def test_compute_position_metrics_with_errors():
         if label in ["n", "N"]:  # Knights
             predictions[square, ChessVision.LABEL_INDICES["b" if label == "n" else "B"]] = 1.0  # Predict as bishop
             predictions[square, ChessVision.LABEL_INDICES[label]] = 0.9  # Correct as second choice
+            predictions[square, ChessVision.LABEL_INDICES["p" if label == "n" else "P"]] = 0.5  # Third choice
         elif label in ["p", "P"]:  # Pawns
             predictions[square, ChessVision.LABEL_INDICES["f"]] = 1.0  # Predict as empty
+            predictions[square, ChessVision.LABEL_INDICES["b" if label == "p" else "B"]] = 0.9  # Second choice
             predictions[square, ChessVision.LABEL_INDICES[label]] = 0.8  # Correct as third choice
         else:
             predictions[square, ChessVision.LABEL_INDICES[label]] = 1.0  # Perfect prediction
@@ -169,6 +171,7 @@ def test_compute_position_metrics_with_errors():
     # - 44 perfect predictions (kings, queens, bishops, rooks, empty squares)
     # - 4 knights predicted as bishops (correct in top 2)
     # - 16 pawns predicted as empty (correct in top 3)
-    assert result.top_k_accuracy.top_1 < 1.0  # Not all predictions correct
-    assert result.top_k_accuracy.top_2 > result.top_k_accuracy.top_1  # Better with k=2
-    assert result.top_k_accuracy.top_3 > result.top_k_accuracy.top_2  # Even better with k=3
+    # Total: 44/64 correct in top-1, 48/64 in top-2, all 64 in top-3
+    assert result.top_k_accuracy.top_1 == 44 / 64  # 44 perfect predictions
+    assert result.top_k_accuracy.top_2 == 48 / 64  # 44 + 4 knights correct
+    assert result.top_k_accuracy.top_3 == 1.0  # All correct (44 + 4 + 16)

@@ -157,7 +157,19 @@ module = ["cairosvg.*"]
 ignore_missing_imports = true
 ignore_errors = true
 
+[tool.coverage.run]
+omit = ["chessvision/pytorch_unet/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+]
+
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q --cov=chessvision"
+addopts = "--cov=chessvision --cov-report=term-missing"
 testpaths = ["tests"]
