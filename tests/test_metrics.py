@@ -75,8 +75,8 @@ def test_compute_top_k_accuracy():
     assert result.k == 3
     assert len(result.accuracies) == 3
     assert result.top_1 == 0.5  # 32/64 correct
-    assert result.top_2 == 0.75  # 48/64 correct
-    assert result.top_3 == 1.0  # All correct
+    assert result.top_2 == 0.75  # 48/64 correct (32 from top-1 + 16 from top-2)
+    assert result.top_3 == 1.0  # All correct (32 + 16 + 16)
 
 
 def test_compute_top_k_accuracy_variable_k():
@@ -87,11 +87,11 @@ def test_compute_top_k_accuracy_variable_k():
     board = chess.Board(true_fen + " w KQkq - 0 1")
     true_labels = board_to_labels(board)
 
-    # Perfect predictions for pawns
-    for i in range(8, 16):  # Second rank
+    # Perfect predictions for pawns on 2nd rank (indices 48-55 in FEN order)
+    for i in range(48, 56):
         predictions[i, ChessVision.LABEL_INDICES["P"]] = 1.0
     # Perfect predictions for empty squares
-    for i in list(range(8)) + list(range(16, 64)):
+    for i in list(range(48)) + list(range(56, 64)):
         predictions[i, ChessVision.LABEL_INDICES["f"]] = 1.0
 
     # Test k=1
@@ -129,13 +129,17 @@ def test_compute_position_metrics():
     assert len(result.true_labels) == 64
     assert len(result.predicted_labels) == 64
 
-    # Verify specific pieces
-    assert result.true_labels[chess.E1] == "K"  # White king
-    assert result.predicted_labels[chess.E1] == "K"
-    assert result.true_labels[chess.E8] == "k"  # Black king
-    assert result.predicted_labels[chess.E8] == "k"
-    assert result.true_labels[chess.C4] == "B"  # White bishop
-    assert result.predicted_labels[chess.C4] == "B"
+    # Verify specific pieces using FEN order indices
+    e8_idx = 4  # Black king on e8 (5th square on 8th rank)
+    e1_idx = 60  # White king on e1 (5th square on 1st rank)
+    c4_idx = 34  # White bishop on c4 (3rd square on 4th rank)
+
+    assert result.true_labels[e8_idx] == "k"  # Black king
+    assert result.predicted_labels[e8_idx] == "k"
+    assert result.true_labels[e1_idx] == "K"  # White king
+    assert result.predicted_labels[e1_idx] == "K"
+    assert result.true_labels[c4_idx] == "B"  # White bishop
+    assert result.predicted_labels[c4_idx] == "B"
 
 
 def test_compute_position_metrics_with_errors():
