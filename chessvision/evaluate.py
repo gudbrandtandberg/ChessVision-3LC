@@ -4,7 +4,8 @@ import argparse
 import io
 import logging
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import cairosvg
@@ -13,6 +14,7 @@ import chess.svg
 import cv2
 import numpy as np
 import tlc
+from numpy.typing import NDArray
 from PIL import Image
 from tqdm import tqdm
 
@@ -25,58 +27,137 @@ PROJECT_NAME = "chessvision-testing"
 LABEL_NAMES = ChessVision.LABEL_NAMES
 
 
-def accuracy(a: list[str], b: list[str]) -> float:
-    return sum([aa == bb for aa, bb in zip(a, b)]) / len(a)
+@dataclass
+class TopKAccuracyResult:
+    """Results from top-k accuracy computation."""
+
+    k: int
+    accuracies: Sequence[float]
+
+    @property
+    def top_1(self) -> float:
+        """Get top-1 accuracy."""
+        return self.accuracies[0]
+
+    @property
+    def top_2(self) -> float:
+        """Get top-2 accuracy if available."""
+        return self.accuracies[1] if len(self.accuracies) > 1 else 0.0
+
+    @property
+    def top_3(self) -> float:
+        """Get top-3 accuracy if available."""
+        return self.accuracies[2] if len(self.accuracies) > 2 else 0.0
 
 
-def top_k_accuracy(predictions: np.ndarray, true_labels: np.ndarray, k: int = 3) -> tuple[float, ...]:
+@dataclass
+class PositionMetrics:
+    """Metrics for a single position evaluation."""
+
+    top_k_accuracy: TopKAccuracyResult
+    true_labels: list[str]
+    predicted_labels: list[str]
+    true_labels_indices: list[int]
+    predicted_labels_indices: list[int]
+
+
+def board_to_labels(board: chess.Board) -> list[str]:
+    """Convert chess.Board to list of piece labels.
+
+    Args:
+        board: Chess board
+
+    Returns:
+        List of 64 piece symbols in FEN order (a8-h8, a7-h7, ..., a1-h1)
     """
-    predictions: (64, 13) probability distributions
-    truth      : (64, 1)  true labels
-    k          : compute top-1, top-2, top-3 accuracies
+    labels = ["f"] * 64  # Empty squares
 
-    returns    : tuple containing accuracies for k=1, k=2, k=3
+    # Fill in pieces in chess.Board order (a1-h1, a2-h2, ..., a8-h8)
+    board_labels = ["f"] * 64
+    for square, piece in board.piece_map().items():
+        board_labels[square] = piece.symbol()
+
+    # Convert to FEN order (a8-h8, a7-h7, ..., a1-h1)
+    for rank in range(8):
+        for file in range(8):
+            # Convert from board index to FEN index
+            board_idx = rank * 8 + file  # 0-63 from a1
+            fen_idx = (7 - rank) * 8 + file  # 0-63 from a8
+            labels[fen_idx] = board_labels[board_idx]
+
+    return labels
+
+
+def compute_top_k_accuracy(
+    predictions: NDArray[np.float32],
+    true_labels: list[str],
+    k: int = 3,
+) -> TopKAccuracyResult:
+    """Compute top-k accuracy for piece classification.
+
+    Args:
+        predictions: (64, 13) probability distributions
+        true_labels: List of 64 true label strings
+        k: Number of top predictions to consider
+
+    Returns:
+        TopKAccuracyResult containing accuracies for k=1,2,3
     """
+    true_label_indices = [ChessVision.LABEL_INDICES[label] for label in true_labels]
     sorted_predictions = np.argsort(predictions, axis=1)
-    top_k = sorted_predictions[:, -k:]
-    top_k_predictions = np.array([["" for _ in range(k)] for _ in range(64)])
+    top_k_indices = sorted_predictions[:, -k:]
     hits = [0] * k
 
-    for i in range(64):
-        for j in range(k):
-            try:
-                _top_k = list(ChessVision.LABEL_INDICES.keys())[top_k[i, j]]
-            except IndexError:
-                _top_k = "f"
-            top_k_predictions[i, j] = _top_k
-
-    for square_ind in range(64):
-        for j in range(k):
-            if true_labels[square_ind] in top_k_predictions[square_ind, -j - 1 :]:
-                hits[j] += 1
+    for square_idx in range(64):
+        true_label = true_labels[square_idx]
+        # Check each prediction against ground truth
+        for k_idx in range(k):
+            pred_idx = top_k_indices[square_idx, -(k_idx + 1)]
+            pred_label = LABEL_NAMES[pred_idx]
+            if pred_label == true_label:
+                # If correct at k_idx, it's correct for all higher k values
+                for j in range(k_idx, k):
+                    hits[j] += 1
+                break
 
     accuracies = [hit / 64 for hit in hits]
-    return tuple(accuracies)
+    return TopKAccuracyResult(k=k, accuracies=accuracies)
 
 
-def snake(squares: list[str]) -> list[str]:
-    assert len(squares) == 64
-    for i in range(8):
-        squares[i * 8 : (i + 1) * 8] = list(reversed(squares[i * 8 : (i + 1) * 8]))
-    return list(reversed(squares))
+def compute_position_metrics(
+    predictions: NDArray[np.float32],
+    true_fen: str,
+    k: int = 3,
+) -> PositionMetrics:
+    """Compute metrics for a single position.
 
+    Args:
+        predictions: Model predictions (64, 13)
+        true_fen: Ground truth position as FEN string
+        k: Number of top predictions to consider
 
-def vectorize_chessboard(board: chess.Board) -> list[str]:
-    res = list("f" * 64)
+    Returns:
+        PositionMetrics containing accuracy and label information
+    """
+    # Get true labels from FEN
+    true_board = chess.Board(true_fen + " w KQkq - 0 1")  # Add dummy values for full FEN
+    true_labels = board_to_labels(true_board)
+    true_labels_indices = [ChessVision.LABEL_INDICES[label] for label in true_labels]
 
-    piecemap = board.piece_map()
+    # Get predicted labels
+    predicted_labels_indices = np.argmax(predictions, axis=1).tolist()
+    predicted_labels = [ChessVision.LABEL_NAMES[idx] for idx in predicted_labels_indices]
 
-    for i in range(64):
-        piece = piecemap.get(i)
-        if piece:
-            res[i] = piece.symbol()
+    # Compute accuracies
+    top_k = compute_top_k_accuracy(predictions, true_labels, k=k)
 
-    return res
+    return PositionMetrics(
+        top_k_accuracy=top_k,
+        true_labels=true_labels,
+        predicted_labels=predicted_labels,
+        true_labels_indices=true_labels_indices,
+        predicted_labels_indices=predicted_labels_indices,
+    )
 
 
 def get_test_generator(image_dir: Path) -> Generator[tuple[str, np.ndarray], None, None]:
@@ -115,7 +196,7 @@ def evaluate_model(
 
     Args:
         image_folder: Directory containing test images
-        truth_folder: Directory containing ground truth labels
+        truth_folder: Directory containing ground truth labels as FEN strings
         run: Optional 3LC run to log results to
         threshold: Confidence threshold for board extraction
         project_name: Name of the 3LC project
@@ -194,29 +275,25 @@ def evaluate_model(
             extracted_board_url.parent.mkdir(parents=True, exist_ok=True)
             Image.fromarray(result.board_extraction.board_image).save(extracted_board_url)
 
-            # Load the true labels
+            # Load the true labels from FEN
             truth_file = truth_folder / (filename[:-4] + ".txt")
-
             with truth_file.open("r") as truth:
-                true_labels = truth.read()
-
-            true_labels = snake(list(true_labels))
-            true_labels_int = [LABEL_NAMES.index(label) for label in true_labels]
+                true_fen = truth.read().strip()
 
             # Compute the accuracy
             predictions = result.position.predictions
-            top_1, top_2, top_3 = top_k_accuracy(predictions, true_labels, k=3)
+            metrics = compute_position_metrics(predictions, true_fen)
+
+            top_1 = metrics.top_k_accuracy.top_1
+            top_2 = metrics.top_k_accuracy.top_2
+            top_3 = metrics.top_k_accuracy.top_3
+
             top_1_accuracy += top_1
             top_2_accuracy += top_2
             top_3_accuracy += top_3
 
-            # Register the predicted labels
-            board = chess.Board(result.position.fen)
-            predicted_labels = vectorize_chessboard(board)
-            predicted_labels = snake(predicted_labels)
-            predicted_labels_int = [LABEL_NAMES.index(label) for label in predicted_labels]
-
             # Write and register a rendered board image
+            board = chess.Board(result.position.fen)
             svg_url = Path((run.bulk_data_url / "rendered_board" / (filename[:-4] + ".png")).to_str())
             svg_url.parent.mkdir(parents=True, exist_ok=True)
             save_svg(board, svg_url)
@@ -228,8 +305,8 @@ def evaluate_model(
                 "rendered_board": [str(svg_url)] * 64,
                 "accuracy": [top_1] * 64,
                 "square_crop": [Image.fromarray(img.squeeze()) for img in result.position.squares],
-                "true_labels": true_labels_int,
-                "predicted_labels": predicted_labels_int,
+                "true_labels": metrics.true_labels_indices,
+                "predicted_labels": metrics.predicted_labels_indices,
                 "example_id": [index] * 64,
                 "is_failed": [False] * 64,
             }

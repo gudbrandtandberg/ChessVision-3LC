@@ -15,8 +15,8 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from numpy.typing import NDArray
 
+from .cv_types import BoardExtractionResult, ChessVisionResult, PositionResult
 from .pytorch_unet.unet.unet_model import UNet
-from .types import BoardExtractionResult, ChessVisionResult, PositionResult
 
 logger = logging.getLogger(__name__)
 
@@ -391,7 +391,7 @@ class ChessVision:
         return PositionResult(
             fen=board.board_fen(promoted=False),
             predictions=predictions,
-            squares=squares.tolist(),
+            squares=squares,
             square_names=square_names,
             confidence_scores=confidence_scores,
         )
