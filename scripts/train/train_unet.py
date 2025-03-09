@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
-import random
 import time
 from typing import Any
 
-import numpy as np
 import tlc
 import torch
 import torch.nn as nn
@@ -23,9 +20,8 @@ from chessvision.core import ChessVision
 from chessvision.pytorch_unet.evaluate import evaluate
 from chessvision.pytorch_unet.unet import UNet
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
-
-from . import config
-from .create_board_extraction_tables import get_or_create_tables
+from scripts.train import config
+from scripts.train.create_board_extraction_tables import get_or_create_tables
 
 logger = logging.getLogger(__name__)
 
@@ -209,9 +205,9 @@ def train_model(
         LossCollector(),
         tlc.SegmentationMetricsCollector(
             label_map=ChessVision.SEGMENTATION_MAP,
-            threshold=threshold,
+            preprocess_fn=T.Resize((256, 256)),
         ),
-        tlc.EmbeddingsMetricsCollector(layers=[52], reshape_strategy={52: "mean"}),
+        tlc.EmbeddingsMetricsCollector(layers=[52]),
     ]
 
     logger.info(
@@ -268,7 +264,7 @@ def train_model(
     }
 
     # Save initial model state
-    logger.info(
+    save_extractor_checkpoint(
         model,
         checkpoint_path,
         metadata={
@@ -384,10 +380,10 @@ def train_model(
 
     # After training completes
     training_time = time.time() - start_time
-    minutes = int((training_time - start_time) // 60)
-    seconds = int((training_time - start_time) % 60)
+    minutes = int(training_time // 60)
+    seconds = int(training_time % 60)
 
-    logger.info(f"Training completed in {minutes} m and {seconds} s.")
+    logger.info(f"Training completed in {minutes}m {seconds}s.")
 
     logger.info("Reducing embeddings to 2 dimensions using pacmap...")
     run.reduce_embeddings_by_foreign_table_url(
@@ -467,7 +463,6 @@ if __name__ == "__main__":
         learning_rate=args.lr,
         device=device,
         amp=args.amp,
-        project_name=config.CHESSVISION_SEGMENTATION_PROJECT,
         run_name=args.run_name,
         run_description=args.run_description,
         use_sample_weights=args.use_sample_weights,

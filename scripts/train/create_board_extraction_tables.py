@@ -6,8 +6,7 @@ from torch.utils.data import random_split
 
 from chessvision.core import ChessVision
 from chessvision.pytorch_unet.utils.data_loading import BasicDataset
-
-from . import config
+from scripts.train import config
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ def create_tables() -> dict[str, tlc.Table]:
     # Create dataset
     dataset = BasicDataset(
         images_dir=config.BOARD_EXTRACTION_PATHS["images"].as_posix(),
-        masks_dir=config.BOARD_EXTRACTION_PATHS["masks"].as_posix(),
+        mask_dir=config.BOARD_EXTRACTION_PATHS["masks"].as_posix(),
         scale=1.0,
     )
     logger.info(f"Found {len(dataset)} total images")
@@ -103,11 +102,7 @@ def get_or_create_tables(
             project_name=config.BOARD_EXTRACTION_PROJECT,
         )
 
-        logger.info("Using existing tables:")
-        logger.info(f"Training: {tables['train'].url}")
-        logger.info(f"Validation: {tables['val'].url}")
-
-    except Exception:
+    except FileNotFoundError:
         logger.info("Tables not found, creating new ones...")
         tables = create_tables()
 
@@ -119,4 +114,4 @@ if __name__ == "__main__":
         train_table_name=config.INITIAL_TABLE_NAME,
         val_table_name=config.INITIAL_TABLE_NAME,
     )
-    logger.info(tables)
+    print(tables)

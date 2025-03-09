@@ -16,10 +16,9 @@ from PIL.Image import Image
 from torch.utils.data import DataLoader
 
 from chessvision.core import ChessVision
-
-from . import config
-from .create_classification_tables import get_or_create_tables
-from .training_utils import EarlyStopping, set_deterministic_mode, worker_init_fn
+from scripts.train import config
+from scripts.train.create_classification_tables import get_or_create_tables
+from scripts.train.training_utils import EarlyStopping, set_deterministic_mode, worker_init_fn
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +78,7 @@ def train(
         running_loss += loss.item()
         _, predicted = output.max(1)
         total += target.size(0)
-        correct += predicted.eq(target).sum().item()
+        correct += predicted.eq(target.to(device)).sum().item()
 
     train_loss = running_loss / len(train_loader)
     accuracy = 100.0 * correct / total
@@ -103,7 +102,7 @@ def validate(
             running_loss += loss.item()
             _, predicted = output.max(1)
             total += target.size(0)
-            correct += predicted.eq(target).sum().item()
+            correct += predicted.eq(target.to(device)).sum().item()
 
     val_loss = running_loss / len(val_loader)
     accuracy = 100.0 * correct / total
@@ -307,7 +306,7 @@ def train_model(
     minutes = int(training_time // 60)
     seconds = int(training_time % 60)
 
-    logger.info(f"Training completed in {minutes} m and {seconds} s.")
+    logger.info(f"Training completed in {minutes}m {seconds}s.")
 
     logger.info("Reducing embeddings to 2 dimensions using pacmap...")
     run.reduce_embeddings_by_foreign_table_url(
@@ -339,14 +338,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--run-tests", action="store_true")
     parser.add_argument("--use-sample-weights", action="store_true")
-    parser.add_argument("--train-table", type=str, default="")
-    parser.add_argument("--val-table", type=str, default="")
+    parser.add_argument("--train-table", type=str, default=config.INITIAL_TABLE_NAME)
+    parser.add_argument("--val-table", type=str, default=config.INITIAL_TABLE_NAME)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--deterministic", action="store_true")
     parser.add_argument("--sweep-id", type=int, default=None)
+    parser.add_argument("--collection-frequency", type=int, default=5)
+    parser.add_argument("--patience", type=int, default=5)
     return parser.parse_args()
 
 
