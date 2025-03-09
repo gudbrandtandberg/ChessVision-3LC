@@ -34,7 +34,7 @@ run_training() {
     # Build weights flag
     local weights_flag=$([ "$use_weights" = true ] && echo "--use-sample-weights" || echo "")
     
-    python chessvision/board_extraction/train_unet.py \
+    python scripts/train/train_unet.py \
         --learning-rate "$lr" \
         --epochs "$EPOCHS" \
         --batch-size "$BATCH_SIZE" \

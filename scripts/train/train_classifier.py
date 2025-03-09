@@ -18,7 +18,8 @@ from PIL.Image import Image
 from torch.utils.data import DataLoader
 
 from chessvision.core import ChessVision
-from chessvision.piece_classification.training_utils import EarlyStopping
+
+from .training_utils import EarlyStopping
 
 logger = logging.getLogger(__name__)
 

@@ -52,7 +52,7 @@ echo "  Mixed precision: $USE_AMP"
 echo "  Deterministic: $USE_DETERMINISTIC"
 echo "  Run tests: $RUN_TESTS"
 
-python chessvision/board_extraction/train_unet.py \
+python scripts/train/train_unet.py \
     --learning-rate "$LEARNING_RATE" \
     --epochs "$EPOCHS" \
     --batch-size "$BATCH_SIZE" \

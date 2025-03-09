@@ -17,11 +17,12 @@ from torch.utils.data import DataLoader
 from torchvision import transforms as T  # noqa: N812
 from tqdm import tqdm
 
-from chessvision.board_extraction.loss_collector import LossCollector
 from chessvision.core import ChessVision
 from chessvision.pytorch_unet.evaluate import evaluate
 from chessvision.pytorch_unet.unet import UNet
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
+
+from .unet_loss_collector import LossCollector
 
 DATASET_ROOT = f"{ChessVision.DATA_ROOT}/board_extraction"
 tlc.register_url_alias(
