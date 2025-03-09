@@ -5,7 +5,6 @@ import logging
 import time
 from typing import Any
 
-import timm
 import tlc
 import torch
 import torch.multiprocessing as mp
@@ -18,32 +17,18 @@ from torch.utils.data import DataLoader
 
 from chessvision.core import ChessVision
 
-from .training_utils import EarlyStopping
+from . import config
+from .create_classification_tables import get_or_create_tables
+from .training_utils import EarlyStopping, set_deterministic_mode, worker_init_fn
 
 logger = logging.getLogger(__name__)
 
 mp.set_start_method("spawn", force=True)
 
-DATASET_ROOT = f"{ChessVision.DATA_ROOT}/squares"
-tlc.register_url_alias("CHESSPIECES_DATASET_ROOT", DATASET_ROOT)
-tlc.register_url_alias("PROJECT_ROOT", str(tlc.Configuration.instance().project_root_url))
-
-TRAIN_DATASET_PATH = DATASET_ROOT + "/training"
-VAL_DATASET_PATH = DATASET_ROOT + "/validation"
-
-TRAIN_DATASET_NAME = "chesspieces-train"
-VAL_DATASET_NAME = "chesspieces-val"
-
-# Hyperparameters
-NUM_CLASSES = ChessVision.NUM_CLASSES
-BATCH_SIZE = 32
-INITIAL_LR = 0.001
+# Constants
 LR_SCHEDULER_STEP_SIZE = 4
 LR_SCHEDULER_GAMMA = 0.1
-MAX_EPOCHS = 10
-EARLY_STOPPING_PATIENCE = 4
 HIDDEN_LAYER_INDEX = 90
-MODEL_ID = ChessVision.MODEL_ID
 
 train_transforms = transforms.Compose(
     [
@@ -72,12 +57,6 @@ def train_map(sample: tuple[Image, int]) -> tuple[torch.Tensor, int]:
 
 def val_map(sample: tuple[Image, int]) -> tuple[torch.Tensor, int]:
     return val_transforms(sample[0]), sample[1]
-
-
-train_dataset = datasets.ImageFolder(TRAIN_DATASET_PATH)
-val_dataset = datasets.ImageFolder(VAL_DATASET_PATH)
-
-sample_structure = (tlc.PILImage("image"), tlc.CategoricalLabel("label", classes=ChessVision.LABEL_NAMES))
 
 
 def train(
@@ -131,139 +110,127 @@ def validate(
     return val_loss, accuracy
 
 
-def load_checkpoint(
+def save_classifier_checkpoint(
     model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer | None = None,
-    filename: str = "checkpoint.pth",
-) -> tuple[torch.nn.Module, torch.optim.Optimizer | None, int, float]:
-    device = ChessVision.get_device()
-    checkpoint = torch.load(filename, map_location=device)
-    model.load_state_dict(checkpoint["model_state_dict"])
-    if optimizer is not None:
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    epoch = checkpoint["epoch"]
-    best_val_loss = checkpoint["best_val_loss"]
-    return model, optimizer, epoch, best_val_loss
-
-
-def save_checkpoint(
-    model: torch.nn.Module,
+    checkpoint_path: str,
     optimizer: torch.optim.Optimizer,
-    epoch: int | None = None,
-    best_val_loss: float | None = None,
-    filename: str = "checkpoint.pth",
-) -> str:
-    torch.save(
-        {
-            "epoch": epoch,
-            "best_val_loss": best_val_loss,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-        },
-        filename,
+    metadata: dict[str, Any],
+) -> None:
+    state_dict = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "metadata": metadata,
+    }
+    torch.save(state_dict, checkpoint_path)
+
+
+def train_model(
+    model: torch.nn.Module,
+    device: torch.device,
+    epochs: int = 5,
+    batch_size: int = 1,
+    learning_rate: float = 1e-5,
+    save_checkpoint: bool = True,
+    run_name: str | None = None,
+    run_description: str | None = None,
+    use_sample_weights: bool = False,
+    collection_frequency: int = 5,
+    patience: int = 5,
+    sweep_id: int | None = None,
+    train_table_name: str = config.INITIAL_TABLE_NAME,
+    val_table_name: str = config.INITIAL_TABLE_NAME,
+    deterministic: bool = False,
+    seed: int = 42,
+) -> tuple[tlc.Run, tlc.Url]:
+    if deterministic:
+        seed_worker = worker_init_fn
+        g = torch.Generator()
+        g.manual_seed(seed)
+    else:
+        seed_worker = None
+        g = None
+
+    # Create a 3LC Run
+    parameters = {
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "sweep_id": sweep_id,
+        "use_sample_weights": use_sample_weights,
+        "learning_rate": learning_rate,
+    }
+
+    run = tlc.init(
+        project_name=config.PIECE_CLASSIFICATION_PROJECT,
+        run_name=run_name,
+        description=run_description,
+        parameters=parameters,
     )
-    return filename
 
+    # Write checkpoints in the run directory
+    checkpoint_path = run.bulk_data_url / "checkpoint.pth"
+    checkpoint_path.make_parents(True)
 
-def main(args: argparse.Namespace) -> None:
-    # Training variables
-    start = time.time()
-    early_stopping = EarlyStopping(patience=EARLY_STOPPING_PATIENCE, verbose=True)
-    device = ChessVision.get_device()
-    model = get_classifier_model()
-    model = model.to(device)
+    tables = get_or_create_tables(
+        train_table_name=train_table_name,
+        val_table_name=val_table_name,
+    )
+
+    train_table = tables["train"]
+    val_table = tables["val"]
+
+    train_table.map(train_map).map_collect_metrics(val_map)
+    val_table.map(val_map)
+
+    logger.info(f"Using training table {train_table.url}")
+    logger.info(f"Using validation table {val_table.url}")
+
+    # Create data loaders
+    train_data_loader = DataLoader(
+        train_table,
+        batch_size=batch_size,
+        shuffle=not use_sample_weights,
+        sampler=train_table.create_sampler() if use_sample_weights else None,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True,
+        worker_init_fn=seed_worker,
+        generator=g,
+    )
+    val_data_loader = DataLoader(
+        val_table,
+        shuffle=False,
+        batch_size=batch_size,
+        pin_memory=True,
+        worker_init_fn=seed_worker,
+        generator=g,
+    )
+
+    # Set up metrics collection
+    metrics_collectors = [
+        tlc.ClassificationMetricsCollector(classes=ChessVision.LABEL_NAMES),
+        tlc.EmbeddingsMetricsCollector(layers=[HIDDEN_LAYER_INDEX]),
+    ]
+
+    predictor = tlc.Predictor(model, layers=[HIDDEN_LAYER_INDEX])
+
+    # Set up training
+    early_stopping = EarlyStopping(patience=patience, verbose=True)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=INITIAL_LR)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=LR_SCHEDULER_STEP_SIZE, gamma=LR_SCHEDULER_GAMMA)
     start_epoch = 0
     best_val_loss = float("inf")
     best_val_accuracy = 0.0
 
-    # Create a Run object
-    run_parameters = {
-        "INITIAL_LR": INITIAL_LR,
-        "LR_SCHEDULER_STEP_SIZE": LR_SCHEDULER_STEP_SIZE,
-        "LR_SCHEDULER_GAMMA": LR_SCHEDULER_GAMMA,
-        "MAX_EPOCHS": MAX_EPOCHS,
-        "EARLY_STOPPING_PATIENCE": EARLY_STOPPING_PATIENCE,
-        "MODEL_ID": MODEL_ID,
-        "BATCH_SIZE": BATCH_SIZE,
-    }
+    collection_epochs = list(range(collection_frequency, epochs + 1, collection_frequency))
 
-    run = tlc.init(
-        project_name=args.project_name,
-        run_name=args.run_name,
-        description=args.description,
-        parameters=run_parameters,
-        if_exists="reuse" if args.resume else "rename",
-    )
-
-    checkpoint_path = run.bulk_data_url / "checkpoint.pth"
-    checkpoint_path.make_parents(True)
-
-    # Create datasets
-    try:
-        # Try to get existing tables
-        tlc_train_dataset = tlc.Table.from_names(
-            table_name=args.train_table,
-            dataset_name=TRAIN_DATASET_NAME,
-            project_name=args.project_name,
-        ).revision()
-
-        tlc_val_dataset = tlc.Table.from_names(
-            table_name=args.val_table,
-            dataset_name=VAL_DATASET_NAME,
-            project_name=args.project_name,
-        ).revision()
-
-        logger.info(f"Using existing tables:")
-        logger.info(f"Training: {tlc_train_dataset.url}")
-        logger.info(f"Validation: {tlc_val_dataset.url}")
-    except tlc.TableNotFoundError:
-        # Create new tables if they don't exist
-        logger.info("Tables not found, creating new ones...")
-        from .create_classification_tables import create_tables
-
-        tlc_train_dataset, tlc_val_dataset = create_tables(args.project_name)
-
-    # Create data loaders
-    sampler = tlc_train_dataset.create_sampler() if args.use_sample_weights else None
-    train_data_loader = DataLoader(
-        tlc_train_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=not sampler,
-        sampler=sampler,
-        num_workers=4,
-        pin_memory=True,
-        persistent_workers=True,
-    )
-    val_data_loader = DataLoader(
-        tlc_val_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        num_workers=0,
-        pin_memory=True,
-    )
-
-    # Set up metrics collection
-    metrics_collection_dataloader_args = {
-        "batch_size": 512,
-    }
-    chessvision_metrics_collector = tlc.ClassificationMetricsCollector(
-        classes=ChessVision.LABEL_NAMES,
-    )
-
-    metrics_collectors = [
-        chessvision_metrics_collector,
-    ]
-    if args.compute_embeddings:
-        embeddings_collector = tlc.EmbeddingsMetricsCollector(layers=[HIDDEN_LAYER_INDEX])
-        metrics_collectors.append(embeddings_collector)
-
-    predictor = tlc.Predictor(model, layers=[HIDDEN_LAYER_INDEX])
+    # Ensure at least one collection at the end
+    if epochs not in collection_epochs:
+        collection_epochs.append(epochs)
 
     # Train model
-    for epoch in range(start_epoch, start_epoch + MAX_EPOCHS):
+    start = time.time()
+    for epoch in range(start_epoch, start_epoch + epochs):
         train_loss, train_acc = train(model, train_data_loader, criterion, optimizer, device)
         val_loss, val_acc = validate(model, val_data_loader, criterion, device)
         scheduler.step()
@@ -291,12 +258,38 @@ def main(args: argparse.Namespace) -> None:
             best_val_loss = val_loss
             best_val_accuracy = val_acc
             logger.info("Saving model...")
-            save_checkpoint(
-                model,
-                optimizer,
-                epoch,
-                best_val_loss,
-                str(checkpoint_path),
+            if save_checkpoint:
+                save_classifier_checkpoint(
+                    model,
+                    checkpoint_path,
+                    optimizer=optimizer,
+                    metadata={
+                        "epoch": epoch,
+                        "best_val_loss": best_val_loss,
+                    },
+                )
+
+        if epoch in collection_epochs:
+            tlc.collect_metrics(
+                train_table,
+                metrics_collectors=metrics_collectors,
+                predictor=predictor,
+                split="val",
+                constants={"epoch": epoch},
+                dataloader_args={"batch_size": 512},
+                exclude_zero_weights=True,
+                collect_aggregates=False,
+            )
+
+            tlc.collect_metrics(
+                train_table,
+                metrics_collectors=metrics_collectors,
+                predictor=predictor,
+                split="train",
+                constants={"epoch": epoch},
+                dataloader_args={"batch_size": 512},
+                exclude_zero_weights=True,
+                collect_aggregates=False,
             )
 
         early_stopping(val_loss)
@@ -305,72 +298,94 @@ def main(args: argparse.Namespace) -> None:
             logger.info("Early stopping")
             break
 
-    tlc.collect_metrics(
-        tlc_val_dataset,
-        metrics_collectors=metrics_collectors,
-        predictor=predictor,
-        split="val",
-        constants={"epoch": epoch},
-        dataloader_args=metrics_collection_dataloader_args,
-        exclude_zero_weights=True,
-        collect_aggregates=False,
+        # Clear cache between epochs
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    # After training completes
+    training_time = time.time() - start
+    minutes = int(training_time // 60)
+    seconds = int(training_time % 60)
+
+    logger.info(f"Training completed in {minutes} m and {seconds} s.")
+
+    logger.info("Reducing embeddings to 2 dimensions using pacmap...")
+    run.reduce_embeddings_by_foreign_table_url(
+        train_table.url,
+        method="pacmap",
+        n_components=2,
+        delete_source_tables=True,
     )
-
-    tlc.collect_metrics(
-        tlc_train_dataset,
-        metrics_collectors=metrics_collectors,
-        predictor=predictor,
-        split="train",
-        constants={"epoch": epoch},
-        dataloader_args=metrics_collection_dataloader_args,
-        exclude_zero_weights=True,
-        collect_aggregates=False,
-    )
-
-    duration = time.time() - start
-    minutes = int(duration // 60)
-    seconds = int(duration % 60)
-    logger.info(f"Training completed in {minutes} minutes and {seconds} seconds.")
-
-    if args.compute_embeddings:
-        logger.info("Reducing embeddings...")
-        run.reduce_embeddings_by_foreign_table_url(
-            tlc_train_dataset.url,
-            n_components=2,
-            method="pacmap",
-            delete_source_tables=True,
-        )
 
     run.set_parameters(
         {
             "best_val_accuracy": best_val_accuracy,
             "model_path": checkpoint_path.apply_aliases().to_str(),
-            "use_sample_weights": args.use_sample_weights,
+            "train_table": tables["train"].url.apply_aliases().to_str(),
+            "val_table": tables["val"].url.apply_aliases().to_str(),
+            "final_epoch": epoch,
+            "training_time": training_time,
         },
     )
-    if args.run_tests:
-        from chessvision.evaluate import evaluate_model
 
-        logger.info("Running tests...")
-        del model
-        evaluate_model(run=run, classifier_weights=checkpoint_path.to_str())
+    return run, checkpoint_path
 
 
-def get_classifier_model() -> torch.nn.Module:
-    """Initialize the piece classifier model."""
-    return timm.create_model(MODEL_ID, num_classes=NUM_CLASSES, in_chans=1)  # type: ignore
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-name", type=str, default="")
+    parser.add_argument("--description", type=str, default="")
+    parser.add_argument("--compute-embeddings", action="store_true")
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--run-tests", action="store_true")
+    parser.add_argument("--use-sample-weights", action="store_true")
+    parser.add_argument("--train-table", type=str, default="")
+    parser.add_argument("--val-table", type=str, default="")
+    parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--learning-rate", type=float, default=0.001)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--deterministic", action="store_true")
+    parser.add_argument("--sweep-id", type=int, default=None)
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    argparser = argparse.ArgumentParser()
-    argparser.add_argument("--project-name", type=str, default="chessvision-classification")
-    argparser.add_argument("--run-name", type=str, default="")
-    argparser.add_argument("--description", type=str, default="")
-    argparser.add_argument("--compute-embeddings", action="store_true")
-    argparser.add_argument("--resume", action="store_true")
-    argparser.add_argument("--run-tests", action="store_true")
-    argparser.add_argument("--use-sample-weights", action="store_true")
-    argparser.add_argument("--train-table", type=str, default="")
-    argparser.add_argument("--val-table", type=str, default="")
-    args = argparser.parse_args()
-    main(args)
+    args = parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    if args.deterministic:
+        set_deterministic_mode(args.seed)
+
+    device = ChessVision.get_device()
+    logger.info(f"Using device {device}")
+
+    model = ChessVision.get_classifier_model()
+    model = model.to(device)
+
+    run, checkpoint_path = train_model(
+        model=model,
+        device=device,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        learning_rate=args.learning_rate,
+        run_name=args.run_name,
+        run_description=args.description,
+        use_sample_weights=args.use_sample_weights,
+        collection_frequency=args.collection_frequency,
+        patience=args.patience,
+        sweep_id=args.sweep_id,
+        train_table_name=args.train_table,
+        val_table_name=args.val_table,
+    )
+
+    if args.run_tests:
+        from chessvision.evaluate import evaluate_model
+
+        del model
+
+        evaluate_model(
+            run=run,
+            classifier_weights=checkpoint_path.to_str(),
+        )

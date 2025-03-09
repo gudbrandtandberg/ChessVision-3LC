@@ -16,6 +16,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torchvision import transforms as T  # noqa: N812
 from tqdm import tqdm
+from training_utils import set_deterministic_mode, worker_init_fn
 from unet_loss_collector import LossCollector
 
 from chessvision.core import ChessVision
@@ -23,38 +24,10 @@ from chessvision.pytorch_unet.evaluate import evaluate
 from chessvision.pytorch_unet.unet import UNet
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
 
-DATASET_ROOT = f"{ChessVision.DATA_ROOT}/board_extraction"
-tlc.register_url_alias(
-    "CHESSVISION_SEGMENTATION_DATA_ROOT",
-    DATASET_ROOT,
-)
-tlc.register_url_alias(
-    "CHESSVISION_SEGMENTATION_PROJECT_ROOT",
-    f"{tlc.Configuration.instance().project_root_url}/chessvision-segmentation",
-)
+from . import config
+from .create_board_extraction_tables import get_or_create_tables
 
-
-def worker_init_fn(worker_id: int) -> None:
-    """Initialize worker with a unique seed."""
-    worker_seed = 42 + worker_id  # Base seed + worker offset
-    np.random.seed(worker_seed)
-    random.seed(worker_seed)
-    torch.manual_seed(worker_seed)
-
-
-def set_deterministic_mode(seed: int = 42) -> None:
-    """Set seeds and configurations for deterministic training."""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-    os.environ["PYTHONHASHSEED"] = str(seed)
+logger = logging.getLogger(__name__)
 
 
 def save_extractor_checkpoint(
@@ -62,7 +35,10 @@ def save_extractor_checkpoint(
     checkpoint_path: str,
     metadata: dict[str, Any],
 ) -> None:
-    state_dict = {"model_state_dict": model.state_dict(), "metadata": metadata}
+    state_dict = {
+        "model_state_dict": model.state_dict(),
+        "metadata": metadata,
+    }
     torch.save(state_dict, checkpoint_path)
 
 
@@ -141,12 +117,10 @@ def train_model(
     batch_size: int = 1,
     learning_rate: float = 1e-5,
     save_checkpoint: bool = True,
-    img_scale: float = 0.5,
     amp: bool = False,
     weight_decay: float = 1e-8,
     momentum: float = 0.999,
     gradient_clipping: float = 1.0,
-    project_name: str = "chessvision-segmentation",
     run_name: str | None = None,
     run_description: str | None = None,
     use_sample_weights: bool = False,
@@ -157,13 +131,10 @@ def train_model(
     seed: int = 42,
     deterministic: bool = False,
     sweep_id: int | None = None,
-    train_table_name: str = "table",
-    val_table_name: str = "table",
-    train_dataset_name: str = "chessboard-segmentation-train",
-    val_dataset_name: str = "chessboard-segmentation-val",
+    train_table_name: str = config.INITIAL_TABLE_NAME,
+    val_table_name: str = config.INITIAL_TABLE_NAME,
 ) -> tuple[tlc.Run, tlc.Url]:
     if deterministic:
-        # Only set up worker seeds, main process already deterministic
         seed_worker = worker_init_fn
         g = torch.Generator()
         g.manual_seed(seed)
@@ -171,7 +142,7 @@ def train_model(
         seed_worker = None
         g = None
 
-    # Create 3LC datasets & training run
+    # Create a 3LC Run
     parameters = {
         "epochs": epochs,
         "batch_size": batch_size,
@@ -180,8 +151,8 @@ def train_model(
         "learning_rate": learning_rate,
     }
     run = tlc.init(
-        project_name,
-        run_name,
+        project_name=config.BOARD_EXTRACTION_PROJECT,
+        run_name=run_name,
         parameters=parameters,
         description=run_description,
     )
@@ -190,37 +161,27 @@ def train_model(
     checkpoint_path = run.bulk_data_url / "checkpoint.pth"
     checkpoint_path.make_parents(True)
 
-    tlc_train_dataset = (
-        tlc.Table.from_names(
-            table_name=train_table_name,
-            dataset_name=train_dataset_name,
-            project_name=project_name,
-        )
-        .map(TransformSampleToModel())
-        .revision()
+    tables = get_or_create_tables(
+        train_table_name=train_table_name,
+        val_table_name=val_table_name,
     )
+    train_table = tables["train"]
+    val_table = tables["val"]
 
-    tlc_val_dataset = (
-        tlc.Table.from_names(
-            table_name=val_table_name,
-            dataset_name=val_dataset_name,
-            project_name=project_name,
-        )
-        .map(TransformSampleToModel())
-        .revision()
-    )
+    train_table.map(TransformSampleToModel())
+    val_table.map(TransformSampleToModel())
 
-    n_train = len(tlc_train_dataset)
-    n_val = len(tlc_val_dataset)
+    n_train = len(train_table)
+    n_val = len(val_table)
 
-    logging.info(f"Using training table {tlc_train_dataset.url}")
-    logging.info(f"Using validation table {tlc_val_dataset.url}")
+    logger.info(f"Using training table {train_table.url}")
+    logger.info(f"Using validation table {val_table.url}")
 
-    # 3. Create data loaders
+    # Create data loaders
     train_loader = DataLoader(
-        tlc_train_dataset,
+        train_table,
         shuffle=not use_sample_weights,
-        sampler=tlc_train_dataset.create_sampler() if use_sample_weights else None,
+        sampler=train_table.create_sampler() if use_sample_weights else None,
         batch_size=batch_size,
         num_workers=4,
         pin_memory=True,
@@ -229,7 +190,7 @@ def train_model(
         generator=g,
     )
     val_loader = DataLoader(
-        tlc_val_dataset,
+        val_table,
         shuffle=False,
         drop_last=True,
         batch_size=batch_size,
@@ -238,7 +199,22 @@ def train_model(
         generator=g,
     )
 
-    logging.info(
+    # Set up metrics collection
+    predictor = tlc.Predictor(
+        model=model,
+        layers=[52],
+    )
+
+    metrics_collectors = [
+        LossCollector(),
+        tlc.SegmentationMetricsCollector(
+            label_map=ChessVision.SEGMENTATION_MAP,
+            threshold=threshold,
+        ),
+        tlc.EmbeddingsMetricsCollector(layers=[52], reshape_strategy={52: "mean"}),
+    ]
+
+    logger.info(
         f"""Starting training:
         Epochs:           {epochs}
         Batch size:       {batch_size}
@@ -247,13 +223,12 @@ def train_model(
         Validation size:  {n_val}
         Checkpoints:      {save_checkpoint}
         Device:           {device.type}
-        Images scaling:   {img_scale}
         Mixed Precision:  {amp}
         Sampling weights: {use_sample_weights}
     """,
     )
 
-    # 4. Set up the optimizer, the loss, the learning rate scheduler and the loss scaling for AMP
+    # Set up the optimizer, the loss, the learning rate scheduler and the loss scaling for AMP
     optimizer = optim.RMSprop(
         model.parameters(),
         lr=learning_rate,
@@ -293,7 +268,7 @@ def train_model(
     }
 
     # Save initial model state
-    save_extractor_checkpoint(
+    logger.info(
         model,
         checkpoint_path,
         metadata={
@@ -304,7 +279,7 @@ def train_model(
     )
 
     # 5. Begin training
-    start_time = time.time()  # Start timing at beginning of training
+    start_time = time.time()
     for epoch in range(1, epochs + 1):
         model.train()
         epoch_loss = 0
@@ -369,39 +344,30 @@ def train_model(
                     "training_config": training_config,
                 },
             )
-            logging.info(f"Checkpoint {epoch} saved! (Dice score: {best_val_score}, run: {run.name})")
+            logger.info(f"Checkpoint {epoch} saved! (Dice score: {best_val_score}, run: {run.name})")
         else:
             patience_counter += 1
 
-        tlc.log({"train_loss": epoch_loss / n_train, "epoch": epoch})
+        tlc.log(
+            {
+                "train_loss": epoch_loss / n_train,
+                "epoch": epoch,
+            },
+        )
 
         # Collect per-sample metrics using tlc every 5 epochs
         if epoch in collection_epochs:
-            predictor = tlc.Predictor(
-                model=model,
-                layers=[52],
-            )
-
-            collectors = [
-                LossCollector(),
-                tlc.SegmentationMetricsCollector(
-                    label_map=ChessVision.SEGMENTATION_MAP,
-                    threshold=threshold,
-                ),
-                tlc.EmbeddingsMetricsCollector(layers=[52], reshape_strategy={52: "mean"}),
-            ]
-
             tlc.collect_metrics(
-                tlc_train_dataset,
-                metrics_collectors=collectors,
+                train_table,
+                metrics_collectors=metrics_collectors,
                 predictor=predictor,
                 split="train",
                 constants={"step": global_step, "epoch": epoch},
                 dataloader_args={"batch_size": 4},
             )
             tlc.collect_metrics(
-                tlc_val_dataset,
-                metrics_collectors=collectors,
+                val_table,
+                metrics_collectors=metrics_collectors,
                 predictor=predictor,
                 split="val",
                 constants={"step": global_step, "epoch": epoch},
@@ -409,7 +375,7 @@ def train_model(
             )
 
             if patience_counter >= patience and epoch != epochs:
-                logging.info(f"Early stopping triggered after {epoch} epochs")
+                logger.info(f"Early stopping triggered after {epoch} epochs")
                 break
 
         # Clear cache between epochs
@@ -417,27 +383,26 @@ def train_model(
             torch.cuda.empty_cache()
 
     # After training completes
-    stop_time = time.time()
-    training_minutes = int((stop_time - start_time) // 60)
-    training_seconds = int((stop_time - start_time) % 60)
-    training_time = f"{training_minutes}m {training_seconds}s"
+    training_time = time.time() - start_time
+    minutes = int((training_time - start_time) // 60)
+    seconds = int((training_time - start_time) % 60)
 
-    logging.info(f"Training completed in {training_time}")
+    logger.info(f"Training completed in {minutes} m and {seconds} s.")
 
-    logging.info("Reducing embeddings to 2 dimensions using pacmap...")
+    logger.info("Reducing embeddings to 2 dimensions using pacmap...")
     run.reduce_embeddings_by_foreign_table_url(
-        tlc_train_dataset.url,
-        delete_source_tables=True,
+        train_table.url,
         method="pacmap",
         n_components=2,
+        delete_source_tables=True,
     )
 
     run.set_parameters(
         {
             "best_val_score": best_val_score,
             "model_path": checkpoint_path.apply_aliases().to_str(),
-            "train_table": tlc_train_dataset.url.apply_aliases().to_str(),
-            "val_table": tlc_val_dataset.url.apply_aliases().to_str(),
+            "train_table": train_table.url.apply_aliases().to_str(),
+            "val_table": val_table.url.apply_aliases().to_str(),
             "final_epoch": epoch,
             "training_time": training_time,
         },
@@ -464,7 +429,6 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--bilinear", action="store_true", default=False, help="Use bilinear upsampling")
     parser.add_argument("--classes", "-c", type=int, default=1, help="Number of classes")
     parser.add_argument("--run-tests", action="store_true", help="Run the test suite after training")
-    parser.add_argument("--project-name", type=str, default="chessvision-segmentation", help="3LC project name")
     parser.add_argument("--run-name", type=str, default=None, help="3LC run name")
     parser.add_argument("--run-description", type=str, default=None, help="3LC run description")
     parser.add_argument("--threshold", type=float, default=0.5, help="Threshold for binarizing the output masks")
@@ -472,20 +436,9 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--deterministic", action="store_true", help="Enable deterministic training")
     parser.add_argument("--sweep-id", type=int, default=None, help="3LC sweep ID")
-    parser.add_argument("--train-table", type=str, default="table", help="Name of training table")
-    parser.add_argument("--val-table", type=str, default="table", help="Name of validation table")
-    parser.add_argument(
-        "--train-dataset",
-        type=str,
-        default="chessboard-segmentation-train",
-        help="Name of training dataset",
-    )
-    parser.add_argument(
-        "--val-dataset",
-        type=str,
-        default="chessboard-segmentation-val",
-        help="Name of validation dataset",
-    )
+    parser.add_argument("--train-table", type=str, default=config.INITIAL_TABLE_NAME, help="Name of training table")
+    parser.add_argument("--val-table", type=str, default=config.INITIAL_TABLE_NAME, help="Name of validation table")
+    parser.add_argument("--patience", type=int, default=5, help="Number of epochs to wait before early stopping")
 
     return parser.parse_args()
 
@@ -495,23 +448,14 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    # Set deterministic mode BEFORE creating model
     if args.deterministic:
         set_deterministic_mode(args.seed)
 
     device = ChessVision.get_device()
-    logging.info(f"Using device {device}")
+    logger.info(f"Using device {device}")
 
     model: torch.nn.Module = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
     model.to(device=device)
-
-    logging.info(
-        f"Network:\n"
-        f"\t{model.n_channels} input channels\n"
-        f"\t{model.n_classes} output channels (classes)\n"
-        f"\t{'Bilinear' if model.bilinear else 'Transposed conv'} upscaling"
-        f"\t{'Device: ' + str(device)}",
-    )
 
     if args.load:
         model = ChessVision.load_model_checkpoint(model, ChessVision.EXTRACTOR_WEIGHTS, device)
@@ -522,26 +466,22 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         learning_rate=args.lr,
         device=device,
-        img_scale=args.scale,
         amp=args.amp,
-        project_name=args.project_name,
+        project_name=config.CHESSVISION_SEGMENTATION_PROJECT,
         run_name=args.run_name,
         run_description=args.run_description,
         use_sample_weights=args.use_sample_weights,
         validations_per_epoch=2,
         collection_frequency=5,
-        patience=5,
+        patience=args.patience,
         threshold=args.threshold,
         seed=args.seed,
         deterministic=args.deterministic,
         sweep_id=args.sweep_id,
         train_table_name=args.train_table,
         val_table_name=args.val_table,
-        train_dataset_name=args.train_dataset,
-        val_dataset_name=args.val_dataset,
     )
 
-    # Run evaluation if requested
     if args.run_tests:
         from chessvision.evaluate import evaluate_model
 

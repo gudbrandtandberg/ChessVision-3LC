@@ -34,7 +34,6 @@ class ChessVision:
 
     # Model configuration
     NUM_CLASSES = 13
-    MODEL_ID = "resnet18"
 
     # Image sizes
     INPUT_SIZE = (256, 256)
@@ -202,7 +201,7 @@ class ChessVision:
     def _initialize_classifier(self) -> None:
         """Initialize the piece classifier model."""
         logger.info("Initializing piece classifier model...")
-        self._classifier = ChessVision._get_classifier_model()
+        self._classifier = ChessVision.get_classifier_model()
         self._classifier = ChessVision.load_model_checkpoint(self._classifier, self._classifier_weights, self.device)
         self._classifier.eval()
         self._classifier.to(self.device)
@@ -581,13 +580,17 @@ class ChessVision:
         return pred_labels
 
     @staticmethod
-    def _get_classifier_model() -> torch.nn.Module:
+    def get_classifier_model(model_id: str = "resnet18") -> torch.nn.Module:
         """Initialize the piece classifier model.
 
         Returns:
             ResNet18 model configured for chess piece classification
         """
-        return timm.create_model(ChessVision.MODEL_ID, num_classes=ChessVision.NUM_CLASSES, in_chans=1)  # type: ignore
+        return timm.create_model(
+            model_id,
+            num_classes=ChessVision.NUM_CLASSES,
+            in_chans=1,
+        )  # type: ignore
 
     @classmethod
     def load_model_checkpoint(

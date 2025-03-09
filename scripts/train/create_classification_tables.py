@@ -1,26 +1,18 @@
 from __future__ import annotations
 
-import argparse
 import logging
-from pathlib import Path
 
 import tlc
+import torch
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from PIL.Image import Image
 
 from chessvision.core import ChessVision
 
+from . import config
+
 logger = logging.getLogger(__name__)
-
-DATASET_ROOT = f"{ChessVision.DATA_ROOT}/squares"
-tlc.register_url_alias("CHESSPIECES_DATASET_ROOT", DATASET_ROOT)
-
-TRAIN_DATASET_PATH = DATASET_ROOT + "/training"
-VAL_DATASET_PATH = DATASET_ROOT + "/validation"
-
-TRAIN_DATASET_NAME = "chesspieces-train"
-VAL_DATASET_NAME = "chesspieces-val"
 
 # Define transforms
 train_transforms = transforms.Compose(
@@ -31,7 +23,7 @@ train_transforms = transforms.Compose(
         transforms.RandomRotation(degrees=15),
         transforms.ToTensor(),
         transforms.Normalize([0.564], [0.246]),
-    ]
+    ],
 )
 
 val_transforms = transforms.Compose(
@@ -40,7 +32,7 @@ val_transforms = transforms.Compose(
         transforms.Grayscale(),
         transforms.ToTensor(),
         transforms.Normalize([0.564], [0.246]),
-    ]
+    ],
 )
 
 
@@ -52,30 +44,19 @@ def val_map(sample: tuple[Image, int]) -> tuple[torch.Tensor, int]:
     return val_transforms(sample[0]), sample[1]
 
 
-def create_tables(project_name: str = "chessvision-classification") -> tuple[tlc.Table, tlc.Table]:
-    """Create initial train/val tables for piece classification from raw data.
-
-    Args:
-        project_name: Name of the TLC project
-
-    Returns:
-        Tuple of (train_table, val_table)
-    """
+def create_tables() -> dict[str, tlc.Table]:
+    """Create initial train/val tables for piece classification from raw data."""
     logger.info("Creating piece classification tables...")
-    logger.info(f"Using data from {DATASET_ROOT}")
+    logger.info(f"Using data from {config.PIECE_CLASSIFICATION_ROOT}")
 
     # Verify paths exist
-    train_path = Path(TRAIN_DATASET_PATH)
-    val_path = Path(VAL_DATASET_PATH)
-
-    if not train_path.exists():
-        raise FileNotFoundError(f"Training data not found at {train_path}")
-    if not val_path.exists():
-        raise FileNotFoundError(f"Validation data not found at {val_path}")
+    for path in config.PIECE_CLASSIFICATION_PATHS.values():
+        if not path.exists():
+            raise FileNotFoundError(path)
 
     # Create datasets
-    train_dataset = datasets.ImageFolder(TRAIN_DATASET_PATH)
-    val_dataset = datasets.ImageFolder(VAL_DATASET_PATH)
+    train_dataset = datasets.ImageFolder(str(config.PIECE_CLASSIFICATION_PATHS["train"]))
+    val_dataset = datasets.ImageFolder(str(config.PIECE_CLASSIFICATION_PATHS["val"]))
 
     logger.info(f"Found {len(train_dataset)} training images")
     logger.info(f"Found {len(val_dataset)} validation images")
@@ -84,45 +65,62 @@ def create_tables(project_name: str = "chessvision-classification") -> tuple[tlc
     sample_structure = (tlc.PILImage("image"), tlc.CategoricalLabel("label", classes=ChessVision.LABEL_NAMES))
 
     # Create tables
-    tlc_train_dataset = (
-        tlc.Table.from_torch_dataset(
-            dataset=train_dataset,
-            dataset_name=TRAIN_DATASET_NAME,
-            table_name="train",
-            structure=sample_structure,
-            project_name=project_name,
-        )
-        .map(train_map)
-        .map_collect_metrics(val_map)
-        .revision()
+    tables = {}
+    tables["train"] = tlc.Table.from_torch_dataset(
+        dataset=train_dataset,
+        dataset_name=config.PIECE_CLASSIFICATION_DATASETS["train"],
+        table_name="train",
+        structure=sample_structure,
+        project_name=config.PIECE_CLASSIFICATION_PROJECT,
     )
 
-    tlc_val_dataset = (
-        tlc.Table.from_torch_dataset(
-            dataset=val_dataset,
-            dataset_name=VAL_DATASET_NAME,
-            table_name="val",
-            structure=sample_structure,
-            project_name=project_name,
-        )
-        .map(val_map)
-        .revision()
+    tables["val"] = tlc.Table.from_torch_dataset(
+        dataset=val_dataset,
+        dataset_name=config.PIECE_CLASSIFICATION_DATASETS["val"],
+        table_name="val",
+        structure=sample_structure,
+        project_name=config.PIECE_CLASSIFICATION_PROJECT,
     )
 
-    logger.info(f"Created training table: {tlc_train_dataset.url}")
-    logger.info(f"Created validation table: {tlc_val_dataset.url}")
+    logger.info(f"Created training table: {tables['train'].url}")
+    logger.info(f"Created validation table: {tables['val'].url}")
 
-    return tlc_train_dataset, tlc_val_dataset
+    return tables
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--project-name", type=str, default="chessvision-classification")
-    args = parser.parse_args()
+def get_or_create_tables(
+    train_table_name: str,
+    val_table_name: str,
+) -> dict[str, tlc.Table]:
+    """Get existing tables or create new ones if they don't exist."""
+    try:
+        tables = {}
+        tables["train"] = tlc.Table.from_names(
+            table_name=train_table_name,
+            dataset_name=config.PIECE_CLASSIFICATION_DATASETS["train"],
+            project_name=config.PIECE_CLASSIFICATION_PROJECT,
+        )
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    create_tables(args.project_name)
+        tables["val"] = tlc.Table.from_names(
+            table_name=val_table_name,
+            dataset_name=config.PIECE_CLASSIFICATION_DATASETS["val"],
+            project_name=config.PIECE_CLASSIFICATION_PROJECT,
+        )
+
+        logger.info("Using existing tables:")
+        logger.info(f"Training: {tables['train'].url}")
+        logger.info(f"Validation: {tables['val'].url}")
+
+    except Exception:
+        logger.info("Tables not found, creating new ones...")
+        tables = create_tables()
+
+    return tables
 
 
 if __name__ == "__main__":
-    main()
+    tables = get_or_create_tables(
+        train_table_name=config.INITIAL_TABLE_NAME,
+        val_table_name=config.INITIAL_TABLE_NAME,
+    )
+    logger.info(tables)

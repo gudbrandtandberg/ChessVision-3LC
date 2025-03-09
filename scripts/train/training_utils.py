@@ -1,4 +1,9 @@
 import logging
+import os
+import random
+
+import numpy as np
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -52,3 +57,26 @@ def plot_metrics(
     plt.legend()
     plt.show()
     input("Press any key to continue...")
+
+
+def worker_init_fn(worker_id: int) -> None:
+    """Initialize worker with a unique seed."""
+    worker_seed = 42 + worker_id  # Base seed + worker offset
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
+
+
+def set_deterministic_mode(seed: int = 42) -> None:
+    """Set seeds and configurations for deterministic training."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+    os.environ["PYTHONHASHSEED"] = str(seed)
