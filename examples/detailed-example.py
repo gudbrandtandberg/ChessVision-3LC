@@ -7,12 +7,14 @@ technical information at each stage. This is intended for developers and researc
 who want to understand the data flow and transformations.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import cv2
 import numpy as np
 import torch
-import torch.nn.functional as F  # type: ignore
+import torch.nn.functional as F  # noqa: N812
 
 from chessvision.core import ChessVision
 

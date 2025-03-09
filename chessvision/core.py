@@ -175,6 +175,7 @@ class ChessVision:
         """Get the board extractor model, initializing if needed."""
         if self._board_extractor is None:
             self._initialize_board_extractor()
+        assert self._board_extractor is not None
         return self._board_extractor
 
     @property
@@ -182,6 +183,7 @@ class ChessVision:
         """Get the classifier model, initializing if needed."""
         if self._classifier is None:
             self._initialize_classifier()
+        assert self._classifier is not None
         return self._classifier
 
     def _initialize_board_extractor(self) -> None:
@@ -190,7 +192,7 @@ class ChessVision:
         self._board_extractor = UNet(n_channels=3, n_classes=1)
         self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)  # type: ignore
         self._board_extractor = self.load_model_checkpoint(
-            self._board_extractor,
+            self._board_extractor,  # type: ignore
             self._board_extractor_weights,
             self.device,
         )
