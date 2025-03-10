@@ -129,6 +129,7 @@ def train_model(
     sweep_id: int | None = None,
     train_table_name: str = config.INITIAL_TABLE_NAME,
     val_table_name: str = config.INITIAL_TABLE_NAME,
+    augment: bool = False,
 ) -> tuple[tlc.Run, tlc.Url]:
     if deterministic:
         seed_worker = worker_init_fn
@@ -145,7 +146,9 @@ def train_model(
         "sweep_id": sweep_id or 0,
         "use_sample_weights": use_sample_weights,
         "learning_rate": learning_rate,
+        "augment": augment,
     }
+
     run = tlc.init(
         project_name=config.BOARD_EXTRACTION_PROJECT,
         run_name=run_name,
@@ -164,7 +167,11 @@ def train_model(
     train_table = tables["train"]
     val_table = tables["val"]
 
-    train_table.map(AugmentImages()).map_collect_metrics(TransformSampleToModel())
+    if augment:
+        train_table.map(AugmentImages()).map_collect_metrics(TransformSampleToModel())
+    else:
+        train_table.map(TransformSampleToModel())
+
     val_table.map(TransformSampleToModel())
 
     n_train = len(train_table)
@@ -427,6 +434,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--amp", action="store_true", default=False, help="Use mixed precision")
     parser.add_argument("--bilinear", action="store_true", default=False, help="Use bilinear upsampling")
     parser.add_argument("--threshold", type=float, default=0.5, help="Threshold for binarizing the output masks")
+    parser.add_argument("--augment", action="store_true", default=False, help="Augment the training data")
 
     return parser.parse_args()
 
@@ -475,6 +483,7 @@ if __name__ == "__main__":
         sweep_id=args.sweep_id,
         train_table_name=args.train_table,
         val_table_name=args.val_table,
+        augment=args.augment,
     )
 
     if args.run_tests:

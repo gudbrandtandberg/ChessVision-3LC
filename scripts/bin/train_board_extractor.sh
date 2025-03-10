@@ -15,7 +15,7 @@ USE_SAMPLE_WEIGHTS=true
 USE_AMP=true
 USE_DETERMINISTIC=true
 RUN_TESTS=true
-
+AUGMENT=true
 # Project settings
 TRAIN_TABLE_NAME="initial"
 VAL_TABLE_NAME="initial"
@@ -38,7 +38,7 @@ WEIGHTS_FLAG=$([ "$USE_SAMPLE_WEIGHTS" = true ] && echo "--use-sample-weights" |
 AMP_FLAG=$([ "$USE_AMP" = true ] && echo "--amp" || echo "")
 DETERMINISTIC_FLAG=$([ "$USE_DETERMINISTIC" = true ] && echo "--deterministic" || echo "")
 TEST_FLAG=$([ "$RUN_TESTS" = true ] && echo "--run-tests" || echo "")
-
+AUGMENT_FLAG=$([ "$AUGMENT" = true ] && echo "--augment" || echo "")
 echo "Starting training with:"
 echo "  Learning rate: $LEARNING_RATE"
 echo "  Epochs: $EPOCHS"
@@ -63,5 +63,6 @@ python scripts/train/train_unet.py \
     --sweep-id "$SWEEP_ID" \
     --train-table "$TRAIN_TABLE_NAME" \
     --val-table "$VAL_TABLE_NAME" \
+    $AUGMENT_FLAG
 
 echo "Training completed!"
