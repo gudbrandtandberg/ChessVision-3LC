@@ -53,7 +53,7 @@ def test_compute_top_k_accuracy() -> None:
     # - First 32 squares perfectly predicted
     # - Next 16 squares correct in top 2
     # - Last 16 squares correct in top 3
-    predictions = np.zeros((64, 13))  # 13 classes
+    predictions = np.zeros((64, 13), dtype=np.float32)  # 13 classes
     true_labels = ["f"] * 64  # All empty squares
 
     # Perfect predictions for first 32
@@ -81,7 +81,7 @@ def test_compute_top_k_accuracy() -> None:
 def test_compute_top_k_accuracy_variable_k() -> None:
     """Test top-k accuracy with different k values."""
     # Test a simple position with white pawns on rank 2
-    predictions = np.zeros((64, 13))
+    predictions = np.zeros((64, 13), dtype=np.float32)
     true_fen = "8/8/8/8/8/8/PPPPPPPP/8"
     board = chess.Board(true_fen + " w KQkq - 0 1")
     true_labels = board_to_labels(board)
@@ -112,7 +112,7 @@ def test_compute_position_metrics() -> None:
     """Test full position metrics computation."""
     # Test with a complex position
     true_fen = "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R"
-    predictions = np.zeros((64, 13))
+    predictions = np.zeros((64, 13), dtype=np.float32)
 
     # Create perfect predictions for this position
     board = chess.Board(true_fen + " w KQkq - 0 1")
@@ -144,7 +144,7 @@ def test_compute_position_metrics() -> None:
 def test_compute_position_metrics_with_errors() -> None:
     """Test position metrics computation with imperfect predictions."""
     true_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"  # Starting position
-    predictions = np.zeros((64, 13))
+    predictions = np.zeros((64, 13), dtype=np.float32)
 
     # Make some intentional mistakes:
     # - Confuse knights with bishops (second most likely)

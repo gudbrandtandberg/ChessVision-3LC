@@ -377,7 +377,7 @@ def probability_distribution(mask: np.ndarray) -> float:
 
     # Ideal distribution has values concentrated at 0 and 1
     # Calculate entropy (lower entropy means more concentrated distribution)
-    entropy: float = -np.sum(hist * np.log2(hist + 1e-10))  # type: ignore
+    entropy: float = -np.sum(hist * np.log2(hist + 1e-10))
     max_entropy: float = -np.log2(1 / 10)  # Maximum entropy for 10 bins
 
     # Convert to score (1 - normalized entropy)
@@ -411,8 +411,8 @@ def mask_completeness(mask: np.ndarray) -> float:
     cv2.drawContours(filled_mask, [largest_contour], 0, 1, -1)  # type: ignore
 
     # Calculate the ratio of the original mask area to the filled contour area
-    original_area: float = np.sum(binary_mask)
-    filled_area: float = np.sum(filled_mask)
+    original_area = float(np.sum(binary_mask))
+    filled_area = float(np.sum(filled_mask))
 
     if filled_area == 0:
         return 0.0

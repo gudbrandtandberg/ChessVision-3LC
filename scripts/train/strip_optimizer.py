@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Script to strip optimizer state from classifier checkpoints."""
 
+from __future__ import annotations
+
 import argparse
 import logging
 from pathlib import Path

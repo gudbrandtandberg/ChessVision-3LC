@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Literal
 
 import chess
 import cv2
@@ -28,7 +27,7 @@ class ChessVision:
         self,
         board_extractor_weights: str | None = None,
         classifier_weights: str | None = None,
-        classifier_model_id: Literal["resnet18", "yolo"] = "resnet18",
+        classifier_model_id: str = "resnet18",
         lazy_load: bool = True,
     ):
         """Initialize ChessVision with optional custom model weights.
@@ -89,10 +88,11 @@ class ChessVision:
 
             from chessvision.utils import YOLOModelWrapper
 
-            self._classifier = YOLOModelWrapper(TLCYOLO(self._classifier_weights))
+            self._classifier = YOLOModelWrapper(TLCYOLO(self._classifier_weights))  # type: ignore
         else:
             self._classifier = utils.get_classifier_model(self._classifier_model_id)
             self._classifier = utils.load_model_checkpoint(self._classifier, self._classifier_weights, self.device)
+        assert self._classifier is not None
         self._classifier.eval()
         self._classifier.to(self.device)
 
@@ -231,10 +231,14 @@ class ChessVision:
             )
 
         # Scale quadrangle to original image size
-        scaled_quad = ChessVision._scale_quadrangle(quadrangle, (orig_image.shape[0], orig_image.shape[1]))
+        scaled_quad = ChessVision._scale_quadrangle(
+            quadrangle,
+            (orig_image.shape[0], orig_image.shape[1]),
+        )
 
         # Extract and process board
-        board = utils.extract_perspective(orig_image, scaled_quad, constants.BOARD_SIZE)
+        # Convert quadrangle to uint8 for extract_perspective
+        board = utils.extract_perspective(orig_image, scaled_quad.astype(np.uint8), constants.BOARD_SIZE)
         if len(board.shape) == 3:  # If image has multiple channels
             board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
         board = cv2.flip(board, 1)  # TODO: permute approximation instead
@@ -296,7 +300,10 @@ class ChessVision:
         contours, _ = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_TC89_KCOS)
 
         if len(contours) > 1:
-            contours = ChessVision._filter_contours(mask.shape, contours)
+            contours = ChessVision._filter_contours(
+                (mask.shape[0], mask.shape[1]),
+                contours,  # type: ignore
+            )
 
         if not contours:
             return None
@@ -314,11 +321,11 @@ class ChessVision:
     @staticmethod
     def _filter_contours(
         img_shape: tuple[int, int],
-        contours: list[NDArray[np.int32]],
+        contours: list[NDArray[np.uint32]],
         min_ratio_bounding: float = 0.6,
         min_area_percentage: float = 0.35,
         max_area_percentage: float = 1.0,
-    ) -> list[NDArray[np.int32]]:
+    ) -> list[NDArray[np.uint32]]:
         """Filter contours based on area and aspect ratio criteria."""
         filtered = []
         mask_area = float(img_shape[0] * img_shape[1])
@@ -337,17 +344,19 @@ class ChessVision:
         return filtered
 
     @staticmethod
-    def _rotate_quadrangle(approx: NDArray[np.int32]) -> NDArray[np.int32]:
+    def _rotate_quadrangle(approx: NDArray[np.uint32]) -> NDArray[np.uint32]:
         """Rotate quadrangle to ensure consistent orientation."""
         if approx[0, 0, 0] < approx[2, 0, 0]:
             approx = approx[[3, 0, 1, 2], :, :]
         return approx
 
     @staticmethod
-    def _scale_quadrangle(approx: NDArray[np.int32], orig_size: tuple[int, int]) -> NDArray[np.uint32]:
+    def _scale_quadrangle(approx: NDArray[np.uint32], orig_size: tuple[int, int]) -> NDArray[np.uint32]:
         """Scale quadrangle approximation to match original image size."""
         sf = orig_size[0] / 256.0
-        return np.array(approx * sf, dtype=np.uint32)
+        # First scale as float64 to avoid overflow, then convert to uint32
+        scaled = np.array(approx * sf, dtype=np.float64)
+        return scaled.astype(np.uint32)
 
     @staticmethod
     def _extract_squares(

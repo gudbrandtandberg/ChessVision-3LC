@@ -23,7 +23,7 @@ class PositionResult:
 
     fen: str  # FEN string representation of the position
     predictions: np.ndarray  # Raw model predictions for each square
-    squares: list[np.ndarray]  # Individual square images
+    squares: np.ndarray  # Individual square images
     square_names: list[str]  # Chess coordinates for each square
     confidence_scores: dict[str, float]  # Confidence scores per square
 
