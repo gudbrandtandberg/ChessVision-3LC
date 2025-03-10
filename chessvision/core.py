@@ -237,10 +237,8 @@ class ChessVision:
         )
 
         # Extract and process board
-        # Convert quadrangle to uint8 for extract_perspective
-        board = utils.extract_perspective(orig_image, scaled_quad.astype(np.uint8), constants.BOARD_SIZE)
-        if len(board.shape) == 3:  # If image has multiple channels
-            board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
+        board = utils.extract_perspective(orig_image, scaled_quad, constants.BOARD_SIZE)
+        board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
         board = cv2.flip(board, 1)  # TODO: permute approximation instead
 
         return BoardExtractionResult(
@@ -295,7 +293,7 @@ class ChessVision:
         )
 
     @staticmethod
-    def _find_quadrangle(mask: NDArray[np.uint8]) -> NDArray[np.uint32] | None:
+    def _find_quadrangle(mask: NDArray[np.uint8]) -> NDArray[np.int32] | None:
         """Find a quadrangle (4-sided polygon) in a binary mask."""
         contours, _ = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_TC89_KCOS)
 
@@ -321,11 +319,11 @@ class ChessVision:
     @staticmethod
     def _filter_contours(
         img_shape: tuple[int, int],
-        contours: list[NDArray[np.uint32]],
+        contours: list[NDArray[np.int32]],
         min_ratio_bounding: float = 0.6,
         min_area_percentage: float = 0.35,
         max_area_percentage: float = 1.0,
-    ) -> list[NDArray[np.uint32]]:
+    ) -> list[NDArray[np.int32]]:
         """Filter contours based on area and aspect ratio criteria."""
         filtered = []
         mask_area = float(img_shape[0] * img_shape[1])
@@ -344,19 +342,17 @@ class ChessVision:
         return filtered
 
     @staticmethod
-    def _rotate_quadrangle(approx: NDArray[np.uint32]) -> NDArray[np.uint32]:
+    def _rotate_quadrangle(approx: NDArray[np.int32]) -> NDArray[np.int32]:
         """Rotate quadrangle to ensure consistent orientation."""
         if approx[0, 0, 0] < approx[2, 0, 0]:
             approx = approx[[3, 0, 1, 2], :, :]
         return approx
 
     @staticmethod
-    def _scale_quadrangle(approx: NDArray[np.uint32], orig_size: tuple[int, int]) -> NDArray[np.uint32]:
+    def _scale_quadrangle(approx: NDArray[np.int32], orig_size: tuple[int, int]) -> NDArray[np.float32]:
         """Scale quadrangle approximation to match original image size."""
         sf = orig_size[0] / 256.0
-        # First scale as float64 to avoid overflow, then convert to uint32
-        scaled = np.array(approx * sf, dtype=np.float64)
-        return scaled.astype(np.uint32)
+        return np.array(approx * sf, dtype=np.float32)
 
     @staticmethod
     def _extract_squares(

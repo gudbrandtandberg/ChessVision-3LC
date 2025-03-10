@@ -80,7 +80,7 @@ def listdir_nohidden(path: str) -> list[str]:
     return [f for f in os.listdir(path) if not f.startswith(".")]
 
 
-def create_binary_mask(mask: NDArray[np.uint8], threshold: float = 0.5) -> NDArray[np.uint8]:
+def create_binary_mask(mask: NDArray[np.float32], threshold: float = 0.5) -> NDArray[np.uint8]:
     """Convert probability mask to binary mask."""
     mask = mask.copy()
     mask[mask > threshold] = 255
@@ -90,7 +90,7 @@ def create_binary_mask(mask: NDArray[np.uint8], threshold: float = 0.5) -> NDArr
 
 def extract_perspective(
     image: NDArray[np.uint8],
-    approx: NDArray[np.uint8],
+    approx: NDArray[np.float32],
     out_size: tuple[int, int],
 ) -> NDArray[np.uint8]:
     """Extract a perspective-corrected region from an image."""
