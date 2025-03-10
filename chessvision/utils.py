@@ -100,3 +100,53 @@ def extract_perspective(
 
     coeffs = cv2.getPerspectiveTransform(approx, dest)
     return cv2.warpPerspective(image, coeffs, out_size)
+
+
+def display_comparison(
+    original_img: NDArray[np.uint8],
+    mask: NDArray[np.uint8],
+    board_img: NDArray[np.uint8],
+    fen: str,
+    figsize: tuple[int, int] = (20, 5),
+) -> None:
+    import io
+
+    import cairosvg
+    import chess
+    import chess.svg
+    import matplotlib.pyplot as plt
+
+    _, axes = plt.subplots(1, 4, figsize=figsize)
+
+    # Original image
+    axes[0].imshow(cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB))
+    axes[0].set_title("Original Image")
+    axes[0].axis("off")
+
+    # Segmentation mask
+    axes[1].imshow(mask, cmap="gray")
+    axes[1].set_title("Segmentation Mask")
+    axes[1].axis("off")
+
+    # Extracted board
+    axes[2].imshow(board_img, cmap="gray")
+    axes[2].set_title("Extracted Board")
+    axes[2].axis("off")
+
+    # Chess position
+    if fen:
+        board = chess.Board(fen)
+        svg_board = chess.svg.board(board, size=300)
+        axes[3].axis("off")
+        axes[3].set_title("Detected Position")
+
+        # Convert SVG to a format matplotlib can display
+        svg_img = cairosvg.svg2png(bytestring=svg_board.encode())
+        chess_img = plt.imread(io.BytesIO(svg_img))
+        axes[3].imshow(chess_img)
+    else:
+        axes[3].text(0.5, 0.5, "No valid FEN detected", horizontalalignment="center", verticalalignment="center")
+        axes[3].axis("off")
+
+    plt.tight_layout()
+    plt.show()

@@ -16,7 +16,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F  # noqa: N812
 
-from chessvision.core import ChessVision
+from chessvision import ChessVision, constants, utils
 
 
 def print_tensor_info(name: str, tensor: torch.Tensor | np.ndarray) -> None:
@@ -59,7 +59,7 @@ def main() -> None:
     flip = False  # Whether the board is shown from the white side
     threshold = 0.5  # Threshold for the board extraction
 
-    device = ChessVision.get_device()
+    device = utils.get_device()
     print(f"Using device: {device}")
 
     # 1. Initialize ChessVision
@@ -75,7 +75,7 @@ def main() -> None:
 
     # 2. Load and Process Image
     print("\n=== Image Loading and Preprocessing ===")
-    test_image_path = Path(ChessVision.DATA_ROOT) / "test" / "raw" / "3cb7e9ca-0549-4072-a0ef-ae5ea82174e6.JPG"
+    test_image_path = Path(constants.DATA_ROOT) / "test" / "raw" / "3cb7e9ca-0549-4072-a0ef-ae5ea82174e6.JPG"
     print(f"Loading image: {test_image_path}")
 
     original_img = cv2.imread(str(test_image_path))
@@ -114,7 +114,7 @@ def main() -> None:
 
                 print(f"\n{square_name}:")
                 for prob, idx in zip(top_k.values, top_k.indices):
-                    piece = ChessVision.LABEL_NAMES[idx]
+                    piece = constants.LABEL_NAMES[idx]
                     print(f"  {piece:2}: {prob:.2%}")
     else:
         print("No board detected in image!")

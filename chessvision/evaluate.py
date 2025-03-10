@@ -165,12 +165,6 @@ def get_test_generator(image_dir: Path) -> Generator[tuple[str, np.ndarray], Non
         yield img_filenames[i], test_imgs[i]
 
 
-def chessboard_to_pil_image(chessboard: chess.Board) -> Image.Image:
-    svg = chess.svg.board(chessboard)
-    buffer = cairosvg.svg2png(bytestring=svg.encode("utf-8"))
-    return Image.open(io.BytesIO(buffer))
-
-
 def save_svg(chessboard: chess.Board, path: Path) -> None:
     svg = chess.svg.board(chessboard)
     cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=str(path))

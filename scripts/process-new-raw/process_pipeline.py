@@ -277,7 +277,7 @@ def enrich_tlc_table(
                 # Convert SVG to PIL Image
 
                 png_data = cairosvg.svg2png(bytestring=svg_data.encode())
-                board_image = Image.open(io.BytesIO(png_data))
+                board_image = Image.open(io.BytesIO(png_data)).convert("RGB")
                 board_image = board_image.resize(constants.BOARD_SIZE)
 
                 # Add successful extraction results
