@@ -5,7 +5,6 @@ from pathlib import Path
 import tlc
 
 from chessvision import constants
-from chessvision.core import ChessVision
 
 # Project names
 BOARD_EXTRACTION_PROJECT = "chessvision-segmentation"

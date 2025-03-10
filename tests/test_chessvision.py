@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
-from chessvision import ChessVision
+from chessvision import ChessVision, constants
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def cv_model() -> ChessVision:
 @pytest.fixture
 def test_image() -> np.ndarray:
     """Load a test image from the test data directory."""
-    test_image_path = Path(ChessVision.DATA_ROOT) / "test" / "raw" / "1bf29f73-bc30-448b-a894-bd6428754a0c.JPG"
+    test_image_path = Path(constants.DATA_ROOT) / "test" / "raw" / "1bf29f73-bc30-448b-a894-bd6428754a0c.JPG"
     if not test_image_path.exists():
         pytest.skip(f"Test image not found at {test_image_path}")
     return cv2.imread(str(test_image_path))
@@ -30,8 +30,8 @@ def test_chessvision_initialization() -> None:
     cv = ChessVision()
     assert cv._board_extractor is None  # Should be None due to lazy loading
     assert cv._classifier is None  # Should be None due to lazy loading
-    assert cv._board_extractor_weights == ChessVision.EXTRACTOR_WEIGHTS
-    assert cv._classifier_weights == ChessVision.CLASSIFIER_WEIGHTS
+    assert cv._board_extractor_weights == constants.EXTRACTOR_WEIGHTS
+    assert cv._classifier_weights == constants.CLASSIFIER_WEIGHTS
 
     # Test custom weights initialization
     custom_extractor = "path/to/extractor.pth"

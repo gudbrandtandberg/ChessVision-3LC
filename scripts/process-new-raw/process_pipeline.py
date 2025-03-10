@@ -39,7 +39,7 @@ import torchvision.transforms.v2 as v2
 from PIL import Image
 from tqdm import tqdm
 
-from chessvision import constants, utils
+from chessvision import constants
 from chessvision.core import ChessVision
 
 # Configure logging

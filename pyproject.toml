@@ -172,5 +172,5 @@ exclude_lines = [
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "--cov=chessvision --cov-report=term-missing"
+addopts = "--cov=chessvision --cov-report=term-missing --cov-report=xml"
 testpaths = ["tests"]

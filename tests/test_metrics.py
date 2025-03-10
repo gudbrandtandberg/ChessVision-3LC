@@ -5,7 +5,7 @@ from __future__ import annotations
 import chess
 import numpy as np
 
-from chessvision.core import ChessVision
+from chessvision import constants
 from chessvision.evaluate import (
     TopKAccuracyResult,
     board_to_labels,
@@ -57,16 +57,16 @@ def test_compute_top_k_accuracy() -> None:
     true_labels = ["f"] * 64  # All empty squares
 
     # Perfect predictions for first 32
-    predictions[:32, ChessVision.LABEL_INDICES["f"]] = 1.0
+    predictions[:32, constants.LABEL_INDICES["f"]] = 1.0
 
     # Top-2 predictions for next 16
-    predictions[32:48, ChessVision.LABEL_INDICES["p"]] = 1.0  # Wrong prediction
-    predictions[32:48, ChessVision.LABEL_INDICES["f"]] = 0.9  # Correct but lower confidence
+    predictions[32:48, constants.LABEL_INDICES["p"]] = 1.0  # Wrong prediction
+    predictions[32:48, constants.LABEL_INDICES["f"]] = 0.9  # Correct but lower confidence
 
     # Top-3 predictions for last 16
-    predictions[48:, ChessVision.LABEL_INDICES["P"]] = 1.0  # Wrong prediction
-    predictions[48:, ChessVision.LABEL_INDICES["p"]] = 0.9  # Wrong prediction
-    predictions[48:, ChessVision.LABEL_INDICES["f"]] = 0.8  # Correct but lowest confidence
+    predictions[48:, constants.LABEL_INDICES["P"]] = 1.0  # Wrong prediction
+    predictions[48:, constants.LABEL_INDICES["p"]] = 0.9  # Wrong prediction
+    predictions[48:, constants.LABEL_INDICES["f"]] = 0.8  # Correct but lowest confidence
 
     result = compute_top_k_accuracy(predictions, true_labels, k=3)
 
@@ -88,10 +88,10 @@ def test_compute_top_k_accuracy_variable_k() -> None:
 
     # Perfect predictions for pawns on 2nd rank (indices 48-55 in FEN order)
     for i in range(48, 56):
-        predictions[i, ChessVision.LABEL_INDICES["P"]] = 1.0
+        predictions[i, constants.LABEL_INDICES["P"]] = 1.0
     # Perfect predictions for empty squares
     for i in list(range(48)) + list(range(56, 64)):
-        predictions[i, ChessVision.LABEL_INDICES["f"]] = 1.0
+        predictions[i, constants.LABEL_INDICES["f"]] = 1.0
 
     # Test k=1
     result_k1 = compute_top_k_accuracy(predictions, true_labels, k=1)
@@ -119,7 +119,7 @@ def test_compute_position_metrics() -> None:
     true_labels = board_to_labels(board)
 
     for square, label in enumerate(true_labels):
-        predictions[square, ChessVision.LABEL_INDICES[label]] = 1.0
+        predictions[square, constants.LABEL_INDICES[label]] = 1.0
 
     result = compute_position_metrics(predictions, true_fen, k=3)
 
@@ -154,15 +154,15 @@ def test_compute_position_metrics_with_errors() -> None:
 
     for square, label in enumerate(true_labels):
         if label in ["n", "N"]:  # Knights
-            predictions[square, ChessVision.LABEL_INDICES["b" if label == "n" else "B"]] = 1.0  # Predict as bishop
-            predictions[square, ChessVision.LABEL_INDICES[label]] = 0.9  # Correct as second choice
-            predictions[square, ChessVision.LABEL_INDICES["p" if label == "n" else "P"]] = 0.5  # Third choice
+            predictions[square, constants.LABEL_INDICES["b" if label == "n" else "B"]] = 1.0  # Predict as bishop
+            predictions[square, constants.LABEL_INDICES[label]] = 0.9  # Correct as second choice
+            predictions[square, constants.LABEL_INDICES["p" if label == "n" else "P"]] = 0.5  # Third choice
         elif label in ["p", "P"]:  # Pawns
-            predictions[square, ChessVision.LABEL_INDICES["f"]] = 1.0  # Predict as empty
-            predictions[square, ChessVision.LABEL_INDICES["b" if label == "p" else "B"]] = 0.9  # Second choice
-            predictions[square, ChessVision.LABEL_INDICES[label]] = 0.8  # Correct as third choice
+            predictions[square, constants.LABEL_INDICES["f"]] = 1.0  # Predict as empty
+            predictions[square, constants.LABEL_INDICES["b" if label == "p" else "B"]] = 0.9  # Second choice
+            predictions[square, constants.LABEL_INDICES[label]] = 0.8  # Correct as third choice
         else:
-            predictions[square, ChessVision.LABEL_INDICES[label]] = 1.0  # Perfect prediction
+            predictions[square, constants.LABEL_INDICES[label]] = 1.0  # Perfect prediction
 
     result = compute_position_metrics(predictions, true_fen, k=3)
 

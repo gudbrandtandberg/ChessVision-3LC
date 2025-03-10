@@ -16,7 +16,6 @@ from PIL.Image import Image
 from torch.utils.data import DataLoader
 
 from chessvision import constants, utils
-from chessvision.core import ChessVision
 from scripts.train import config
 from scripts.train.create_classification_tables import get_or_create_tables
 from scripts.train.training_utils import EarlyStopping, set_deterministic_mode, worker_init_fn

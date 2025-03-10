@@ -5,8 +5,7 @@ import logging
 import tlc
 import torchvision.datasets as datasets
 
-from chessvision import constants, utils
-from chessvision.core import ChessVision
+from chessvision import constants
 from scripts.train import config
 
 logger = logging.getLogger(__name__)

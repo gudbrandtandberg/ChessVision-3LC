@@ -5,7 +5,6 @@ import torch
 from torch.utils.data import random_split
 
 from chessvision import constants
-from chessvision.core import ChessVision
 from chessvision.pytorch_unet.utils.data_loading import BasicDataset
 from scripts.train import config
 

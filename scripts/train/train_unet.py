@@ -15,7 +15,6 @@ from torchvision import transforms as T  # noqa: N812
 from tqdm import tqdm
 
 from chessvision import constants, utils
-from chessvision.core import ChessVision
 from chessvision.pytorch_unet.evaluate import evaluate
 from chessvision.pytorch_unet.unet import UNet
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
