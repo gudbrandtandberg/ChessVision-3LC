@@ -176,6 +176,7 @@ def evaluate_model(
     threshold: float = 0.5,
     project_name: str = "chessvision-testing",
     run_name: str = "",
+    run_description: str = "",
     board_extractor_weights: str | None = None,
     classifier_weights: str | None = None,
     classifier_model_id: str = "resnet18",
@@ -199,7 +200,11 @@ def evaluate_model(
         The 3LC run containing evaluation results
     """
     if not run:
-        run = tlc.init(project_name, run_name)
+        run = tlc.init(
+            project_name=project_name,
+            run_name=run_name,
+            description=run_description,
+        )
 
     # Initialize ChessVision model with optional weights
     cv = ChessVision(
@@ -342,6 +347,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--project-name", type=str, default="chessvision-testing")
     parser.add_argument("--run-name", type=str, default="")
+    parser.add_argument("--run-description", type=str, default="")
     parser.add_argument("--board-extractor-weights", type=str, help="Path to board extractor weights")
     parser.add_argument("--classifier-weights", type=str, help="Path to classifier weights")
     parser.add_argument("--classifier-model-id", type=str, default="resnet18", help="Classifier model ID")
@@ -350,7 +356,7 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
     logger.info("Running ChessVision evaluation...")
     args = parse_args()
@@ -361,6 +367,7 @@ if __name__ == "__main__":
         truth_folder=Path(args.truth_folder),
         project_name=args.project_name,
         run_name=args.run_name,
+        run_description=args.run_description,
         threshold=args.threshold,
         board_extractor_weights=args.board_extractor_weights,
         classifier_weights=args.classifier_weights,

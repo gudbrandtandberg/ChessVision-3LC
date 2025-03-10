@@ -86,7 +86,7 @@ if __name__ == "__main__":
     )
 
     if args.run_tests:
-        from chessvision.evaluate import evaluate_model
+        from scripts.eval.evaluate import evaluate_model
 
         logger.info("Running tests with trained model...")
         classifier_checkpoint = results.save_dir / "weights" / "best.pt"

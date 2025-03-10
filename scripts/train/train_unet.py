@@ -487,7 +487,7 @@ if __name__ == "__main__":
     )
 
     if args.run_tests:
-        from chessvision.evaluate import evaluate_model
+        from scripts.eval.evaluate import evaluate_model
 
         del model
 
