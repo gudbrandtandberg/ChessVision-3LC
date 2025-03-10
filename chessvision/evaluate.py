@@ -18,14 +18,11 @@ from numpy.typing import NDArray
 from PIL import Image
 from tqdm import tqdm
 
-from . import constants, utils
-from .core import ChessVision
+from chessvision import ChessVision, constants, utils
 
 logger = logging.getLogger(__name__)
 
 TEST_DATA_DIR = Path(constants.DATA_ROOT) / "test"
-PROJECT_NAME = "chessvision-testing"
-LABEL_NAMES = constants.LABEL_NAMES
 
 
 @dataclass
@@ -113,7 +110,7 @@ def compute_top_k_accuracy(
         # Check each prediction against ground truth
         for k_idx in range(k):
             pred_idx = top_k_indices[square_idx, -(k_idx + 1)]
-            pred_label = LABEL_NAMES[pred_idx]
+            pred_label = constants.LABEL_NAMES[pred_idx]
             if pred_label == true_label:
                 # If correct at k_idx, it's correct for all higher k values
                 for j in range(k_idx, k):
@@ -184,7 +181,7 @@ def evaluate_model(
     truth_folder: Path = TEST_DATA_DIR / "ground_truth",
     run: tlc.Run | None = None,
     threshold: float = 0.5,
-    project_name: str = PROJECT_NAME,
+    project_name: str = "chessvision-testing",
     board_extractor_weights: str | None = None,
     classifier_weights: str | None = None,
 ) -> tlc.Run:
@@ -213,6 +210,7 @@ def evaluate_model(
     cv = ChessVision(
         board_extractor_weights=board_extractor_weights,
         classifier_weights=classifier_weights,
+        lazy_load=False,
     )
 
     # Set up metrics writer
@@ -220,8 +218,8 @@ def evaluate_model(
         run.url,
         column_schemas={
             "raw_img": tlc.Schema(value=tlc.ImageUrlStringValue("raw_img")),
-            "true_labels": tlc.CategoricalLabel("true_labels", LABEL_NAMES),
-            "predicted_labels": tlc.CategoricalLabel("predicted_labels", LABEL_NAMES),
+            "true_labels": tlc.CategoricalLabel("true_labels", constants.LABEL_NAMES),
+            "predicted_labels": tlc.CategoricalLabel("predicted_labels", constants.LABEL_NAMES),
             "rendered_board": tlc.Schema(value=tlc.ImageUrlStringValue("rendered_board")),
             "extracted_board": tlc.Schema(value=tlc.ImageUrlStringValue("extracted_board")),
             "predicted_masks": tlc.Schema(value=tlc.ImageUrlStringValue("predicted_masks")),
@@ -313,9 +311,9 @@ def evaluate_model(
 
             metrics_writer.add_batch(metrics_batch)
 
-    top_1_accuracy /= test_set_size
-    top_2_accuracy /= test_set_size
-    top_3_accuracy /= test_set_size
+    top_1_accuracy /= test_set_size - extraction_failures
+    top_2_accuracy /= test_set_size - extraction_failures
+    top_3_accuracy /= test_set_size - extraction_failures
 
     aggregate_data = {
         "top_1_accuracy": f"{top_1_accuracy: .3f}",
@@ -354,6 +352,8 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     logger.info("Running ChessVision evaluation...")
     args = parse_args()
     start = time.time()
