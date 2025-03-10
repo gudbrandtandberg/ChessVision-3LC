@@ -150,3 +150,24 @@ def display_comparison(
 
     plt.tight_layout()
     plt.show()
+
+
+try:
+    from ultralytics.utils.tlc import TLCYOLO
+
+    class YOLOModelWrapper:
+        def __init__(self, model: TLCYOLO):
+            self.model = model
+
+        def __call__(self, img: NDArray[np.uint8]) -> NDArray[np.float32]:
+            res = self.model(img.repeat(1, 3, 1, 1), verbose=False)
+            return torch.vstack([r.probs.data for r in res])
+
+        def eval(self) -> None:
+            self.model.eval()
+
+        def to(self, device: torch.device) -> None:
+            self.model.to(device)
+
+except ImportError:
+    pass

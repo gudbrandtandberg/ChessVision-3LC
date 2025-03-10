@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Literal
 
 import chess
 import cv2
@@ -27,6 +28,7 @@ class ChessVision:
         self,
         board_extractor_weights: str | None = None,
         classifier_weights: str | None = None,
+        classifier_model_id: Literal["resnet18", "yolo"] = "resnet18",
         lazy_load: bool = True,
     ):
         """Initialize ChessVision with optional custom model weights.
@@ -44,6 +46,7 @@ class ChessVision:
         self._classifier: torch.nn.Module | None = None
         self._board_extractor_weights = board_extractor_weights or constants.EXTRACTOR_WEIGHTS
         self._classifier_weights = classifier_weights or constants.CLASSIFIER_WEIGHTS
+        self._classifier_model_id = classifier_model_id
 
         if not lazy_load:
             self._initialize_board_extractor()
@@ -81,8 +84,15 @@ class ChessVision:
     def _initialize_classifier(self) -> None:
         """Initialize the piece classifier model."""
         logger.info("Initializing piece classifier model...")
-        self._classifier = utils.get_classifier_model()
-        self._classifier = utils.load_model_checkpoint(self._classifier, self._classifier_weights, self.device)
+        if self._classifier_model_id == "yolo":
+            from ultralytics.utils.tlc import TLCYOLO
+
+            from chessvision.utils import YOLOModelWrapper
+
+            self._classifier = YOLOModelWrapper(TLCYOLO(self._classifier_weights))
+        else:
+            self._classifier = utils.get_classifier_model(self._classifier_model_id)
+            self._classifier = utils.load_model_checkpoint(self._classifier, self._classifier_weights, self.device)
         self._classifier.eval()
         self._classifier.to(self.device)
 
@@ -172,13 +182,18 @@ class ChessVision:
         # Get predictions
         with torch.no_grad():
             predictions = self.classifier(batch)
-            probabilities = softmax(predictions, dim=1)
+            probabilities = predictions if self._classifier_model_id == "yolo" else softmax(predictions, dim=1)
 
         # Process results
-        predictions = predictions.detach().cpu().numpy()
+        predictions_np = predictions.detach().cpu().numpy()
         probabilities_np = probabilities.detach().cpu().numpy()
 
-        return self.process_classifier_logits(predictions, probabilities_np, square_names, squares)
+        return self.process_classifier_logits(
+            predictions_np,
+            probabilities_np,
+            square_names,
+            squares,
+        )
 
     @staticmethod
     def process_board_extraction_logits(
@@ -239,10 +254,10 @@ class ChessVision:
         square_names: list[str],
         squares: NDArray[np.uint8],
     ) -> PositionResult:
-        """Process classifier logits without requiring model initialization.
+        """Process classifier predictions and probabilities.
 
         Args:
-            predictions: Raw model output logits
+            predictions: Model predictions (logits for ResNet, probabilities for YOLO)
             probabilities: Softmax probabilities
             square_names: Names of squares in order
             squares: Array of square images
@@ -250,15 +265,15 @@ class ChessVision:
         Returns:
             PositionResult containing classification results
         """
-        # Calculate confidence scores
+        # Calculate confidence scores using probabilities
         confidence_scores = {name: float(prob.max()) for name, prob in zip(square_names, probabilities)}
 
-        # Get initial predictions
-        initial_predictions = np.argmax(predictions, axis=1)
+        # Get initial predictions from probabilities
+        initial_predictions = np.argmax(probabilities, axis=1)
         pred_labels = [constants.LABEL_NAMES[p] for p in initial_predictions]
 
         # Apply chess logic to fix potential errors
-        pred_labels = ChessVision._validate_position(pred_labels, predictions, square_names)
+        pred_labels = ChessVision._validate_position(pred_labels, probabilities, square_names)
 
         # Create chess board from labels
         board = chess.BaseBoard(board_fen=None)

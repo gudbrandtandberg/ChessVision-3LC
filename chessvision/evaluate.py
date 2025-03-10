@@ -177,6 +177,7 @@ def evaluate_model(
     project_name: str = "chessvision-testing",
     board_extractor_weights: str | None = None,
     classifier_weights: str | None = None,
+    classifier_model_id: str = "resnet",
 ) -> tlc.Run:
     """Run evaluation on test images using the ChessVision model.
 
@@ -203,6 +204,7 @@ def evaluate_model(
     cv = ChessVision(
         board_extractor_weights=board_extractor_weights,
         classifier_weights=classifier_weights,
+        classifier_model_id=classifier_model_id,
         lazy_load=False,
     )
 
@@ -340,6 +342,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--project-name", type=str, default="chessvision-testing")
     parser.add_argument("--board-extractor-weights", type=str, help="Path to board extractor weights")
     parser.add_argument("--classifier-weights", type=str, help="Path to classifier weights")
+    parser.add_argument("--classifier-model-id", type=str, default="resnet", help="Classifier model ID")
 
     return parser.parse_args()
 
@@ -358,6 +361,7 @@ if __name__ == "__main__":
         threshold=args.threshold,
         board_extractor_weights=args.board_extractor_weights,
         classifier_weights=args.classifier_weights,
+        classifier_model_id=args.classifier_model_id,
     )
     stop = time.time()
     logger.info(f"Evaluation completed in {stop - start:.1f}s")

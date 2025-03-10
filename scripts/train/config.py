@@ -9,6 +9,7 @@ from chessvision import constants
 # Project names
 BOARD_EXTRACTION_PROJECT = "chessvision-segmentation"
 PIECE_CLASSIFICATION_PROJECT = "chessvision-classification"
+YOLO_CLASSIFICATION_PROJECT = "chessvision-yolo-classification"
 
 # Dataset paths
 BOARD_EXTRACTION_ROOT = Path(constants.DATA_ROOT) / "board_extraction"
