@@ -14,7 +14,7 @@ from chessvision.evaluate import (
 )
 
 
-def test_board_to_labels():
+def test_board_to_labels() -> None:
     """Test converting chess.Board to piece labels."""
     # Test starting position
     fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
@@ -47,7 +47,7 @@ def test_board_to_labels():
     assert sum(1 for label in labels if label != "f") == 1
 
 
-def test_compute_top_k_accuracy():
+def test_compute_top_k_accuracy() -> None:
     """Test top-k accuracy computation."""
     # Create predictions for a simple position:
     # - First 32 squares perfectly predicted
@@ -78,7 +78,7 @@ def test_compute_top_k_accuracy():
     assert result.top_3 == 1.0  # All correct (32 + 16 + 16)
 
 
-def test_compute_top_k_accuracy_variable_k():
+def test_compute_top_k_accuracy_variable_k() -> None:
     """Test top-k accuracy with different k values."""
     # Test a simple position with white pawns on rank 2
     predictions = np.zeros((64, 13))
@@ -108,7 +108,7 @@ def test_compute_top_k_accuracy_variable_k():
     assert all(acc == 1.0 for acc in result_k5.accuracies)
 
 
-def test_compute_position_metrics():
+def test_compute_position_metrics() -> None:
     """Test full position metrics computation."""
     # Test with a complex position
     true_fen = "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R"
@@ -141,7 +141,7 @@ def test_compute_position_metrics():
     assert result.predicted_labels[c4_idx] == "B"
 
 
-def test_compute_position_metrics_with_errors():
+def test_compute_position_metrics_with_errors() -> None:
     """Test position metrics computation with imperfect predictions."""
     true_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"  # Starting position
     predictions = np.zeros((64, 13))

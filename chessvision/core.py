@@ -586,11 +586,11 @@ class ChessVision:
         Returns:
             ResNet18 model configured for chess piece classification
         """
-        return timm.create_model(
+        return timm.create_model(  # type: ignore
             model_id,
             num_classes=ChessVision.NUM_CLASSES,
             in_chans=1,
-        )  # type: ignore
+        )
 
     @classmethod
     def load_model_checkpoint(
