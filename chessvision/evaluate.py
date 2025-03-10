@@ -178,7 +178,7 @@ def evaluate_model(
     run_name: str = "",
     board_extractor_weights: str | None = None,
     classifier_weights: str | None = None,
-    classifier_model_id: str = "resnet",
+    classifier_model_id: str = "resnet18",
 ) -> tlc.Run:
     """Run evaluation on test images using the ChessVision model.
 

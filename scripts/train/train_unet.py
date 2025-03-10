@@ -20,9 +20,8 @@ from chessvision.pytorch_unet.unet import UNet
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
 from scripts.train import config
 from scripts.train.create_board_extraction_tables import get_or_create_tables
-
-from .training_utils import set_deterministic_mode, worker_init_fn
-from .unet_loss_collector import LossCollector
+from scripts.train.training_utils import set_deterministic_mode, worker_init_fn
+from scripts.train.unet_loss_collector import LossCollector
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +164,7 @@ def train_model(
     train_table = tables["train"]
     val_table = tables["val"]
 
-    train_table.map(TransformSampleToModel())
+    train_table.map(AugmentImages()).map_collect_metrics(TransformSampleToModel())
     val_table.map(TransformSampleToModel())
 
     n_train = len(train_table)
@@ -409,9 +408,6 @@ def train_model(
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
-    parser.add_argument("--epochs", "-e", metavar="E", type=int, default=20, help="Number of epochs")
-    parser.add_argument("--batch-size", "-b", dest="batch_size", metavar="B", type=int, default=2, help="Batch size")
-    parser.add_argument("--learning-rate", type=float, default=1e-7, help="Learning rate")
     parser.add_argument("--run-name", type=str, default=None, help="3LC run name")
     parser.add_argument("--run-description", type=str, default=None, help="3LC run description")
     parser.add_argument("--run-tests", action="store_true", help="Run the test suite after training")

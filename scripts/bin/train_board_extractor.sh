@@ -17,12 +17,9 @@ USE_DETERMINISTIC=true
 RUN_TESTS=true
 
 # Project settings
-PROJECT_NAME="chessvision-segmentation"
-TRAIN_DATASET_NAME="chessboard-segmentation-train"
-VAL_DATASET_NAME="chessboard-segmentation-val"
-TRAIN_TABLE_NAME="table"
-VAL_TABLE_NAME="table"
-RUN_DESCRIPTION="TEST_DELETE_ME"
+TRAIN_TABLE_NAME="initial"
+VAL_TABLE_NAME="initial"
+RUN_DESCRIPTION=""
 SWEEP_ID=0
 
 # ======================
@@ -56,7 +53,6 @@ python scripts/train/train_unet.py \
     --learning-rate "$LEARNING_RATE" \
     --epochs "$EPOCHS" \
     --batch-size "$BATCH_SIZE" \
-    --project-name "$PROJECT_NAME" \
     --threshold "$THRESHOLD" \
     --seed 42 \
     $WEIGHTS_FLAG \
@@ -67,7 +63,5 @@ python scripts/train/train_unet.py \
     --sweep-id "$SWEEP_ID" \
     --train-table "$TRAIN_TABLE_NAME" \
     --val-table "$VAL_TABLE_NAME" \
-    --train-dataset "$TRAIN_DATASET_NAME" \
-    --val-dataset "$VAL_DATASET_NAME"
 
 echo "Training completed!"

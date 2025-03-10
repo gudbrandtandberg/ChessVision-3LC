@@ -6,11 +6,8 @@ EPOCHS=20
 BATCH_SIZE=2
 SWEEP_ID=1
 
-PROJECT_NAME="chessvision-segmentation"
-TRAIN_DATASET_NAME="chessboard-segmentation-train"
-VAL_DATASET_NAME="chessboard-segmentation-val"
-TRAIN_TABLE_NAME="table"
-VAL_TABLE_NAME="table"
+TRAIN_TABLE_NAME="initial"
+VAL_TABLE_NAME="initial"
 
 source .venv/Scripts/activate
 
@@ -38,7 +35,6 @@ run_training() {
         --learning-rate "$lr" \
         --epochs "$EPOCHS" \
         --batch-size "$BATCH_SIZE" \
-        --project-name "$PROJECT_NAME" \
         --threshold "$threshold" \
         --seed "$seed" \
         --deterministic \
@@ -49,8 +45,6 @@ run_training() {
         --sweep-id "$SWEEP_ID" \
         --train-table "$TRAIN_TABLE_NAME" \
         --val-table "$VAL_TABLE_NAME" \
-        --train-dataset "$TRAIN_DATASET_NAME" \
-        --val-dataset "$VAL_DATASET_NAME"
 
     echo "Training completed for $description"
     echo "----------------------------------------"
