@@ -175,6 +175,7 @@ def evaluate_model(
     run: tlc.Run | None = None,
     threshold: float = 0.5,
     project_name: str = "chessvision-testing",
+    run_name: str = "",
     board_extractor_weights: str | None = None,
     classifier_weights: str | None = None,
     classifier_model_id: str = "resnet",
@@ -198,7 +199,7 @@ def evaluate_model(
         The 3LC run containing evaluation results
     """
     if not run:
-        run = tlc.init(project_name)
+        run = tlc.init(project_name, run_name)
 
     # Initialize ChessVision model with optional weights
     cv = ChessVision(
@@ -340,9 +341,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--truth-folder", type=str, default=str(TEST_DATA_DIR / "ground_truth"))
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--project-name", type=str, default="chessvision-testing")
+    parser.add_argument("--run-name", type=str, default="")
     parser.add_argument("--board-extractor-weights", type=str, help="Path to board extractor weights")
     parser.add_argument("--classifier-weights", type=str, help="Path to classifier weights")
-    parser.add_argument("--classifier-model-id", type=str, default="resnet", help="Classifier model ID")
+    parser.add_argument("--classifier-model-id", type=str, default="resnet18", help="Classifier model ID")
 
     return parser.parse_args()
 
@@ -358,6 +360,7 @@ if __name__ == "__main__":
         image_folder=Path(args.image_folder),
         truth_folder=Path(args.truth_folder),
         project_name=args.project_name,
+        run_name=args.run_name,
         threshold=args.threshold,
         board_extractor_weights=args.board_extractor_weights,
         classifier_weights=args.classifier_weights,
