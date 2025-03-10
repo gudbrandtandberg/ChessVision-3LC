@@ -103,7 +103,6 @@ def compute_top_k_accuracy(
     Returns:
         TopKAccuracyResult containing accuracies for k=1,2,3
     """
-    true_label_indices = [ChessVision.LABEL_INDICES[label] for label in true_labels]
     sorted_predictions = np.argsort(predictions, axis=1)
     top_k_indices = sorted_predictions[:, -k:]
     hits = [0] * k

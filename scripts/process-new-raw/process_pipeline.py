@@ -23,7 +23,6 @@ import logging
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 import boto3
 import cairosvg
@@ -51,7 +50,7 @@ def download_raw_data(
     bucket: str,
     start_date: datetime.date,
     end_date: datetime.date,
-    output_folder: Optional[Path] = None,
+    output_folder: Path | None = None,
     dry_run: bool = False,
 ) -> Path:
     """
@@ -180,7 +179,7 @@ def create_tlc_table(
 
 def enrich_tlc_table(
     table: tlc.Table,
-    run_name: Optional[str] = None,
+    run_name: str | None = None,
     threshold: float = 0.5,
     embedding_layer: int = 52,
 ) -> str:
@@ -469,10 +468,10 @@ def run_pipeline(
     start_date: datetime.date,
     end_date: datetime.date,
     bucket: str = "chessvision-bucket",
-    output_folder: Optional[Path] = None,
+    output_folder: Path | None = None,
     project_name: str = "chessvision-new-raw",
     dataset_name: str = "chessvision-new-raw",
-    run_name: Optional[str] = None,
+    run_name: str | None = None,
     threshold: float = 0.5,
     embedding_layer: int = 52,
     skip_download: bool = False,

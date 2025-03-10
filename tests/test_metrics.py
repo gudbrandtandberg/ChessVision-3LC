@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import chess
 import numpy as np
-import pytest
 
 from chessvision.core import ChessVision
 from chessvision.evaluate import (
