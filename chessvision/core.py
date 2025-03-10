@@ -27,7 +27,7 @@ class ChessVision:
         self,
         board_extractor_weights: str | None = None,
         classifier_weights: str | None = None,
-        classifier_model_id: str = "resnet18",
+        classifier_model_id: str | None = None,
         lazy_load: bool = True,
     ):
         """Initialize ChessVision with optional custom model weights.
@@ -37,6 +37,10 @@ class ChessVision:
                                    If None, uses best available weights.
             classifier_weights: Path to piece classifier model weights.
                               If None, uses best available weights.
+            classifier_model_id: Model architecture to use. If None, tries YOLO first,
+                               falling back to ResNet if YOLO is not available.
+                               If "yolo" is specified, fails if YOLO is not available.
+                               Other values are passed directly to timm.
             lazy_load: If True, models are loaded only when needed.
                       If False, models are loaded immediately.
         """
@@ -44,7 +48,8 @@ class ChessVision:
         self._board_extractor: torch.nn.Module | None = None
         self._classifier: torch.nn.Module | None = None
         self._board_extractor_weights = board_extractor_weights or constants.BEST_EXTRACTOR_WEIGHTS
-        self._classifier_weights = classifier_weights or constants.BEST_CLASSIFIER_WEIGHTS
+
+        self._classifier_weights = classifier_weights
         self._classifier_model_id = classifier_model_id
 
         if not lazy_load:
@@ -83,15 +88,30 @@ class ChessVision:
     def _initialize_classifier(self) -> None:
         """Initialize the piece classifier model."""
         logger.info("Initializing piece classifier model...")
-        if self._classifier_model_id == "yolo":
-            from ultralytics.utils.tlc import TLCYOLO
 
-            from chessvision.utils import YOLOModelWrapper
-
-            self._classifier = YOLOModelWrapper(TLCYOLO(self._classifier_weights))  # type: ignore
+        # If no model specified, try YOLO first
+        if self._classifier_model_id is None:
+            try:
+                self._classifier = utils.load_yolo_model(self._classifier_weights or constants.BEST_YOLO_CLASSIFIER)
+                self._classifier_model_id = "yolo"  # Mark as using YOLO
+                logger.info("Successfully loaded YOLO model")
+            except ImportError:
+                logger.info("YOLO not available, falling back to ResNet18")
+                self._classifier = utils.get_classifier_model(self._classifier_model_id or "resnet18")
+                self._classifier = utils.load_model_checkpoint(self._classifier, self._classifier_weights, self.device)
+                self._classifier_model_id = "resnet18"
+        # If YOLO explicitly requested, try loading it or fail
+        elif self._classifier_model_id == "yolo":
+            self._classifier = utils.load_yolo_model(self._classifier_weights or constants.BEST_YOLO_CLASSIFIER)
+        # Otherwise load the specified model through timm
         else:
             self._classifier = utils.get_classifier_model(self._classifier_model_id)
-            self._classifier = utils.load_model_checkpoint(self._classifier, self._classifier_weights, self.device)
+            self._classifier = utils.load_model_checkpoint(
+                self._classifier,
+                self._classifier_weights or constants.BEST_CLASSIFIER_WEIGHTS,
+                self.device,
+            )
+
         assert self._classifier is not None
         self._classifier.eval()
         self._classifier.to(self.device)

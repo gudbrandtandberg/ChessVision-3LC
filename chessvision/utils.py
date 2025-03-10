@@ -152,22 +152,47 @@ def display_comparison(
     plt.show()
 
 
-try:
-    from ultralytics.utils.tlc import TLCYOLO
+def load_yolo_model(model_weights: str) -> torch.nn.Module:
+    """Load a YOLO model for piece classification.
+
+    Args:
+        model_weights: Path to YOLO model weights
+
+    Returns:
+        Wrapped YOLO model that implements the classifier interface
+
+    Raises:
+        ImportError: If ultralytics is not installed
+    """
+    try:
+        from ultralytics.utils.tlc import TLCYOLO
+    except ImportError:
+        logger.warning(
+            "YOLO model requires ultralytics package. Please install with 'pip install git+https://github.com/3lc-ai/ultralytics.git'."
+        )
+        raise
 
     class YOLOModelWrapper:
+        """Wrapper to make YOLO model behave like a classifier."""
+
         def __init__(self, model: TLCYOLO):
             self.model = model
 
-        def __call__(self, img: NDArray[np.uint8]) -> torch.Tensor:
+        def __call__(self, img: torch.Tensor) -> torch.Tensor:
+            """Forward pass that returns probabilities for each class."""
             res = self.model(img.repeat((1, 3, 1, 1)), verbose=False)
             return torch.vstack([r.probs.data for r in res])
 
         def eval(self) -> None:
+            """Set the model to evaluation mode."""
             self.model.eval()
 
+        def train(self) -> None:
+            """Set the model to training mode."""
+            self.model.train()
+
         def to(self, device: torch.device) -> None:
+            """Move the model to a specific device."""
             self.model.to(device)
 
-except ImportError:
-    pass
+    return YOLOModelWrapper(TLCYOLO(model_weights))
