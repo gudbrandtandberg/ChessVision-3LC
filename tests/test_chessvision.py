@@ -1,6 +1,5 @@
 """High-level API tests for ChessVision."""
 
-
 import cv2
 import numpy as np
 import pytest
@@ -29,8 +28,8 @@ def test_chessvision_initialization() -> None:
     cv = ChessVision()
     assert cv._board_extractor is None  # Should be None due to lazy loading
     assert cv._classifier is None  # Should be None due to lazy loading
-    assert cv._board_extractor_weights == constants.EXTRACTOR_WEIGHTS
-    assert cv._classifier_weights == constants.CLASSIFIER_WEIGHTS
+    assert cv._board_extractor_weights == constants.BEST_EXTRACTOR_WEIGHTS
+    assert cv._classifier_weights == constants.BEST_CLASSIFIER_WEIGHTS
 
     # Test custom weights initialization
     custom_extractor = "path/to/extractor.pth"

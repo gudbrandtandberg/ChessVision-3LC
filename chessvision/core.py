@@ -43,8 +43,8 @@ class ChessVision:
         self.device = utils.get_device()
         self._board_extractor: torch.nn.Module | None = None
         self._classifier: torch.nn.Module | None = None
-        self._board_extractor_weights = board_extractor_weights or constants.EXTRACTOR_WEIGHTS
-        self._classifier_weights = classifier_weights or constants.CLASSIFIER_WEIGHTS
+        self._board_extractor_weights = board_extractor_weights or constants.BEST_EXTRACTOR_WEIGHTS
+        self._classifier_weights = classifier_weights or constants.BEST_CLASSIFIER_WEIGHTS
         self._classifier_model_id = classifier_model_id
 
         if not lazy_load:

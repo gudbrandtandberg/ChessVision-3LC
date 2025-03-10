@@ -44,8 +44,9 @@ SEGMENTATION_MAP = {0: "background", 255: "chessboard"}
 
 # Model weights paths
 WEIGHTS_DIR = Path(CVROOT) / "weights"
-CLASSIFIER_WEIGHTS = str(WEIGHTS_DIR / "best_classifier.pth")
-EXTRACTOR_WEIGHTS = str(WEIGHTS_DIR / "best_extractor.pth")
+BEST_CLASSIFIER_WEIGHTS = str(WEIGHTS_DIR / "best_classifier.pth")
+BEST_EXTRACTOR_WEIGHTS = str(WEIGHTS_DIR / "best_extractor.pth")
+BEST_YOLO_CLASSIFIER = str(WEIGHTS_DIR / "best_yolo_classifier.pt")
 
 # Chess board constants
 DARK_SQUARES = {

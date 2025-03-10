@@ -452,7 +452,7 @@ if __name__ == "__main__":
     if args.load:
         model = utils.load_model_checkpoint(
             model,
-            constants.EXTRACTOR_WEIGHTS,
+            constants.BEST_EXTRACTOR_WEIGHTS,
             device,
         )
 
