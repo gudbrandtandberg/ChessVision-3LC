@@ -613,7 +613,7 @@ class ChessVision:
             Model with loaded weights
         """
         if device is None:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device = ChessVision.get_device()
 
         state_dict = torch.load(checkpoint_path, map_location=device)
 

@@ -333,14 +333,12 @@ def train_model(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-name", type=str, default="")
-    parser.add_argument("--description", type=str, default="")
-    parser.add_argument("--compute-embeddings", action="store_true")
-    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--run-description", type=str, default="")
     parser.add_argument("--run-tests", action="store_true")
     parser.add_argument("--use-sample-weights", action="store_true")
     parser.add_argument("--train-table", type=str, default=config.INITIAL_TABLE_NAME)
     parser.add_argument("--val-table", type=str, default=config.INITIAL_TABLE_NAME)
-    parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--seed", type=int, default=42)
@@ -348,6 +346,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sweep-id", type=int, default=None)
     parser.add_argument("--collection-frequency", type=int, default=5)
     parser.add_argument("--patience", type=int, default=5)
+    parser.add_argument("--resume", action="store_true")
     return parser.parse_args()
 
 
@@ -372,7 +371,7 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         run_name=args.run_name,
-        run_description=args.description,
+        run_description=args.run_description,
         use_sample_weights=args.use_sample_weights,
         collection_frequency=args.collection_frequency,
         patience=args.patience,

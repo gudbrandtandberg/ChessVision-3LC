@@ -410,31 +410,26 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
     parser.add_argument("--epochs", "-e", metavar="E", type=int, default=20, help="Number of epochs")
     parser.add_argument("--batch-size", "-b", dest="batch_size", metavar="B", type=int, default=2, help="Batch size")
-    parser.add_argument(
-        "--learning-rate",
-        "-l",
-        metavar="LR",
-        type=float,
-        default=1e-7,
-        help="Learning rate",
-        dest="lr",
-    )
+    parser.add_argument("--learning-rate", type=float, default=1e-7, help="Learning rate")
+    parser.add_argument("--run-name", type=str, default=None, help="3LC run name")
+    parser.add_argument("--run-description", type=str, default=None, help="3LC run description")
+    parser.add_argument("--run-tests", action="store_true", help="Run the test suite after training")
+    parser.add_argument("--use-sample-weights", action="store_true", help="Use a weighted sampler")
+    parser.add_argument("--train-table", type=str, default=config.INITIAL_TABLE_NAME, help="Name of training table")
+    parser.add_argument("--val-table", type=str, default=config.INITIAL_TABLE_NAME, help="Name of validation table")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of epochs")
+    parser.add_argument("--batch-size", type=int, default=2, help="Batch size")
+    parser.add_argument("--learning-rate", type=float, default=1e-6, help="Learning rate")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser.add_argument("--deterministic", action="store_true", help="Enable deterministic training")
+    parser.add_argument("--sweep-id", type=int, default=None, help="3LC sweep ID")
+    parser.add_argument("--collection-frequency", type=int, default=5, help="Number of epochs between collections")
+    parser.add_argument("--patience", type=int, default=5, help="Number of epochs to wait before early stopping")
     parser.add_argument("--load", "-f", type=str, default=False, help="Load model from a .pth file")
     parser.add_argument("--scale", "-s", type=float, default=1.0, help="Downscaling factor of the images")
     parser.add_argument("--amp", action="store_true", default=False, help="Use mixed precision")
     parser.add_argument("--bilinear", action="store_true", default=False, help="Use bilinear upsampling")
-    parser.add_argument("--classes", "-c", type=int, default=1, help="Number of classes")
-    parser.add_argument("--run-tests", action="store_true", help="Run the test suite after training")
-    parser.add_argument("--run-name", type=str, default=None, help="3LC run name")
-    parser.add_argument("--run-description", type=str, default=None, help="3LC run description")
     parser.add_argument("--threshold", type=float, default=0.5, help="Threshold for binarizing the output masks")
-    parser.add_argument("--use-sample-weights", action="store_true", help="Use a weighted sampler")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
-    parser.add_argument("--deterministic", action="store_true", help="Enable deterministic training")
-    parser.add_argument("--sweep-id", type=int, default=None, help="3LC sweep ID")
-    parser.add_argument("--train-table", type=str, default=config.INITIAL_TABLE_NAME, help="Name of training table")
-    parser.add_argument("--val-table", type=str, default=config.INITIAL_TABLE_NAME, help="Name of validation table")
-    parser.add_argument("--patience", type=int, default=5, help="Number of epochs to wait before early stopping")
 
     return parser.parse_args()
 
@@ -450,24 +445,32 @@ if __name__ == "__main__":
     device = ChessVision.get_device()
     logger.info(f"Using device {device}")
 
-    model: torch.nn.Module = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
+    model: torch.nn.Module = UNet(
+        n_channels=3,
+        n_classes=1,
+        bilinear=args.bilinear,
+    )
     model.to(device=device)
 
     if args.load:
-        model = ChessVision.load_model_checkpoint(model, ChessVision.EXTRACTOR_WEIGHTS, device)
+        model = ChessVision.load_model_checkpoint(
+            model,
+            ChessVision.EXTRACTOR_WEIGHTS,
+            device,
+        )
 
     run, checkpoint_path = train_model(
         model=model,
+        device=device,
         epochs=args.epochs,
         batch_size=args.batch_size,
-        learning_rate=args.lr,
-        device=device,
+        learning_rate=args.learning_rate,
         amp=args.amp,
         run_name=args.run_name,
         run_description=args.run_description,
         use_sample_weights=args.use_sample_weights,
         validations_per_epoch=2,
-        collection_frequency=5,
+        collection_frequency=args.collection_frequency,
         patience=args.patience,
         threshold=args.threshold,
         seed=args.seed,
@@ -485,5 +488,5 @@ if __name__ == "__main__":
         evaluate_model(
             run=run,
             threshold=args.threshold,
-            board_extractor_weights=str(checkpoint_path),
+            board_extractor_weights=checkpoint_path.to_str(),
         )
