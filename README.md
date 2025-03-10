@@ -1,11 +1,11 @@
 # ChessVision
 
-Welcome to ChessVision: a computer vision system for detecting and classifying chess positions from images.
+Welcome to ChessVision: a computer vision system for detecting and classifying chess positions from images of 2D chessboards.
 The system uses deep learning models to segment chessboards and classify chess pieces.
 
 This project is an evolution of the original [ChessVision](https://github.com/ChessVision/ChessVision),
 reimagined with the [3LC](https://3lc.ai) ecosystem in mind. It features a complete rewrite from Keras to PyTorch
-and a thorough modernization of the codebase.
+and a thorough modernization of the codebase, as well as integration with 3LC throughout the pipeline.
 
 ## Motivation
 
@@ -45,7 +45,7 @@ which I build with my team at 3lc.ai.
 - Ensure submodules are checked out: `git submodule update --init`
 - Create a virtual environment: `python -m venv .venv`
 - Activate the virtual environment: `source .venv/bin/activate`
-- Install dependencies: `pip install -r requirements.txt`
+- Install dependencies: `pip install -e .`
 
 ## Examples
 
@@ -88,7 +88,7 @@ For more details on the original approach, see the [old README](https://github.c
 The repo comes with three original datasets checked in:
 
 - `board_extraction`: A dataset of chessboard images with annotated segmentation masks.
-- `squaresn`: A dataset of chess piece images with annotated classification labels.
+- `squares`: A dataset of chess piece images with annotated classification labels.
 - `test`: A set of test images and ground truth files for evaluating the model.
 
 In addition, there is a practically endless supply of new data collected through a friend's chess app, which I have in a private S3 bucket.
