@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 import logging
 import time
 from collections.abc import Generator, Sequence

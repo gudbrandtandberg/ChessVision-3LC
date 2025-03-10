@@ -14,7 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
-import torch.nn.functional as F  # noqa: N812
+from torch.nn.functional import softmax
 
 from chessvision import ChessVision, constants, utils
 
@@ -109,7 +109,7 @@ def main() -> None:
             for i in first_row_indices:
                 square_name = result.position.square_names[i]
                 predictions = result.position.predictions[i]
-                probabilities = F.softmax(torch.tensor(predictions), dim=0)
+                probabilities = softmax(torch.tensor(predictions), dim=0)
                 top_k = torch.topk(probabilities, k=3)
 
                 print(f"\n{square_name}:")

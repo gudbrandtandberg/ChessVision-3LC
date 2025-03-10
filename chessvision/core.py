@@ -10,8 +10,8 @@ import cv2
 import numpy as np
 import timm
 import torch
-import torch.nn.functional as F  # noqa: N812
 from numpy.typing import NDArray
+from torch.nn.functional import softmax
 
 from . import constants, utils
 from .cv_types import BoardExtractionResult, ChessVisionResult, PositionResult
@@ -172,7 +172,7 @@ class ChessVision:
         # Get predictions
         with torch.no_grad():
             predictions = self.classifier(batch)
-            probabilities = F.softmax(predictions, dim=1)
+            probabilities = softmax(predictions, dim=1)
 
         # Process results
         predictions = predictions.detach().cpu().numpy()

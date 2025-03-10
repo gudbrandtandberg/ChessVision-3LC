@@ -8,10 +8,10 @@ from typing import Any
 import tlc
 import torch
 import torch.nn as nn
-import torchvision.transforms.functional as F  # noqa: N812
 from torch import optim
 from torch.utils.data import DataLoader
-from torchvision import transforms as T  # noqa: N812
+from torchvision.transforms import ColorJitter, GaussianBlur, Resize, ToTensor
+from torchvision.transforms.functional import hflip, rotate
 from tqdm import tqdm
 
 from chessvision import constants, utils
@@ -48,15 +48,15 @@ class TransformSampleToModel:
 
         # Ensure consistent size
         if img.size != (256, 256):
-            img = T.Resize((256, 256))(img)
+            img = Resize((256, 256))(img)
 
         # Ensure mask is single channel
         if mask.mode != "L":
             mask = mask.convert("L")  # Convert to grayscale
 
         # Convert to tensors
-        img_tensor = T.ToTensor()(img)
-        mask_tensor = T.ToTensor()(mask).long()
+        img_tensor = ToTensor()(img)
+        mask_tensor = ToTensor()(mask).long()
 
         return {
             "image": img_tensor,
@@ -72,20 +72,20 @@ class AugmentImages:
 
         # Random horizontal flip
         if torch.rand(1) > 0.5:
-            image = F.hflip(image)
-            mask = F.hflip(mask)
+            image = hflip(image)
+            mask = hflip(mask)
 
         # Random rotation
         if torch.rand(1) > 0.5:
             angle = torch.randint(-15, 15, (1,)).item()
-            image = F.rotate(image, angle)
-            mask = F.rotate(mask, angle)
+            image = rotate(image, angle)
+            mask = rotate(mask, angle)
 
         if torch.rand(1) > 0.5:
-            image = T.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1)(image)
+            image = ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1)(image)
 
         if torch.rand(1) > 0.5:
-            image = T.GaussianBlur(3)(image)
+            image = GaussianBlur(3)(image)
 
         return TransformSampleToModel()({"image": image, "mask": mask})
 
