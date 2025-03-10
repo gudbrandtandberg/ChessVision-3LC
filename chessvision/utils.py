@@ -176,7 +176,7 @@ def load_yolo_model(model_weights: str) -> torch.nn.Module:
         from ultralytics.utils.tlc import TLCYOLO
     except ImportError:
         logger.warning(
-            "YOLO model requires ultralytics package. Please install with 'pip install git+https://github.com/3lc-ai/ultralytics.git'."
+            "YOLO model requires ultralytics package. Please install with 'pip install git+https://github.com/3lc-ai/ultralytics.git'.",
         )
         raise
 
@@ -203,4 +203,4 @@ def load_yolo_model(model_weights: str) -> torch.nn.Module:
             """Move the model to a specific device."""
             self.model.to(device)
 
-    return YOLOModelWrapper(TLCYOLO(model_weights))
+    return YOLOModelWrapper(TLCYOLO(model_weights))  # type: ignore[return-value]

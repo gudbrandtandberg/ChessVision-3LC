@@ -98,7 +98,11 @@ class ChessVision:
             except ImportError:
                 logger.info("YOLO not available, falling back to ResNet18")
                 self._classifier = utils.get_classifier_model(self._classifier_model_id or "resnet18")
-                self._classifier = utils.load_model_checkpoint(self._classifier, self._classifier_weights, self.device)
+                self._classifier = utils.load_model_checkpoint(
+                    self._classifier,
+                    self._classifier_weights or constants.BEST_CLASSIFIER_WEIGHTS,
+                    self.device,
+                )
                 self._classifier_model_id = "resnet18"
         # If YOLO explicitly requested, try loading it or fail
         elif self._classifier_model_id == "yolo":
