@@ -145,7 +145,7 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["cv2.*", "timm.*", "torch.*", "torchvision.*", "boto3.*"]
+module = ["cv2.*", "timm.*", "torch.*", "torchvision.*", "boto3.*", "plotly.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

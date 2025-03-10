@@ -222,7 +222,7 @@ def enrich_tlc_table(
                 v2.ConvertImageDtype(torch.float32),
             ],
         )
-        return transforms(sample)
+        return transforms(sample)  # type: ignore
 
     # Preprocess images
     logger.info("Preprocessing images")
@@ -377,7 +377,7 @@ def probability_distribution(mask: np.ndarray) -> float:
 
     # Ideal distribution has values concentrated at 0 and 1
     # Calculate entropy (lower entropy means more concentrated distribution)
-    entropy: float = -np.sum(hist * np.log2(hist + 1e-10))
+    entropy: float = -np.sum(hist * np.log2(hist + 1e-10))  # type: ignore
     max_entropy: float = -np.log2(1 / 10)  # Maximum entropy for 10 bins
 
     # Convert to score (1 - normalized entropy)
@@ -408,7 +408,7 @@ def mask_completeness(mask: np.ndarray) -> float:
 
     # Create a filled mask from the largest contour
     filled_mask = np.zeros_like(binary_mask)
-    cv2.drawContours(filled_mask, [largest_contour], 0, 1, -1)
+    cv2.drawContours(filled_mask, [largest_contour], 0, 1, -1)  # type: ignore
 
     # Calculate the ratio of the original mask area to the filled contour area
     original_area: float = np.sum(binary_mask)
@@ -421,7 +421,7 @@ def mask_completeness(mask: np.ndarray) -> float:
     return original_area / filled_area
 
 
-def quadrangle_regularity(quadrangle):
+def quadrangle_regularity(quadrangle: np.ndarray | None) -> float:
     """
     Measure how close the quadrangle is to a perfect square.
 
@@ -461,7 +461,7 @@ def quadrangle_regularity(quadrangle):
     angle_variance = np.std(angles) / (np.pi / 2)
 
     # Combine metrics (lower is better, so subtract from 1)
-    return 1.0 - (side_variance * 0.5 + angle_variance * 0.5)
+    return float(1.0 - (side_variance * 0.5 + angle_variance * 0.5))
 
 
 def probability_confidence(probabilities: np.ndarray) -> float:
