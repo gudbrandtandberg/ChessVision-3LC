@@ -44,6 +44,7 @@ class ChessVision:
             lazy_load: If True, models are loaded only when needed.
                       If False, models are loaded immediately.
         """
+        logger.info("Initializing ChessVision instance...")
         self.device = utils.get_device()
         self._board_extractor: torch.nn.Module | None = None
         self._classifier: torch.nn.Module | None = None
@@ -53,8 +54,10 @@ class ChessVision:
         self._classifier_model_id = classifier_model_id
 
         if not lazy_load:
+            logger.info("Eager loading models...")
             self._initialize_board_extractor()
             self._initialize_classifier()
+            logger.info("Models loaded successfully")
 
     @property
     def board_extractor(self) -> torch.nn.Module:
@@ -94,7 +97,7 @@ class ChessVision:
             try:
                 self._classifier = utils.load_yolo_model(self._classifier_weights or constants.BEST_YOLO_CLASSIFIER)
                 self._classifier_model_id = "yolo"  # Mark as using YOLO
-                logger.info("Successfully loaded YOLO model")
+                logger.info(f"Loaded YOLO model from {self._classifier_weights or constants.BEST_YOLO_CLASSIFIER}")
             except ImportError:
                 logger.info("YOLO not available, falling back to ResNet18")
                 self._classifier = utils.get_classifier_model(self._classifier_model_id or "resnet18")
@@ -107,6 +110,7 @@ class ChessVision:
         # If YOLO explicitly requested, try loading it or fail
         elif self._classifier_model_id == "yolo":
             self._classifier = utils.load_yolo_model(self._classifier_weights or constants.BEST_YOLO_CLASSIFIER)
+            logger.info(f"Loaded YOLO model from {self._classifier_weights or constants.BEST_YOLO_CLASSIFIER}")
         # Otherwise load the specified model through timm
         else:
             self._classifier = utils.get_classifier_model(self._classifier_model_id)
@@ -136,17 +140,28 @@ class ChessVision:
         Returns:
             ChessVisionResult containing all processing results
         """
+        assert isinstance(image, np.ndarray), "Image must be a numpy array"
+        assert image.dtype == np.uint8, "Image must be uint8"
+        assert len(image.shape) == 3, "Image must be 3-dimensional (H,W,C)"
+
+        logger.info("Starting image processing pipeline...")
         start_time = time.time()
 
         # Extract board
         board_result = self.extract_board(image, threshold)
+        if board_result.board_image is None:
+            logger.info("No valid board found in image")
+        else:
+            logger.info("Board successfully extracted")
 
         # Classify position if board was found
         position_result = None
         if board_result.board_image is not None:
             position_result = self.classify_position(board_result.board_image, flip)
+            logger.info("Position classification completed")
 
         processing_time = time.time() - start_time
+        logger.info(f"Processing completed in {processing_time:.2f} seconds")
 
         return ChessVisionResult(
             board_extraction=board_result,
@@ -235,6 +250,11 @@ class ChessVision:
         Returns:
             BoardExtractionResult containing extraction results
         """
+        assert isinstance(logits, np.ndarray), "Logits must be a numpy array"
+        assert logits.dtype == np.float32, "Logits must be float32"
+        assert isinstance(orig_image, np.ndarray), "Original image must be a numpy array"
+        assert orig_image.dtype == np.uint8, "Original image must be uint8"
+
         # Convert logits to probabilities
         probabilities = torch.sigmoid(torch.tensor(logits)).numpy()
 
@@ -244,8 +264,8 @@ class ChessVision:
         # Find quadrangle in mask
         quadrangle = ChessVision._find_quadrangle(binary_mask)
 
-        # If no valid quadrangle found, return early
         if quadrangle is None:
+            logger.warning("No valid quadrangle found in mask")
             return BoardExtractionResult(
                 board_image=None,
                 logits=logits,
@@ -259,6 +279,7 @@ class ChessVision:
             quadrangle,
             (orig_image.shape[0], orig_image.shape[1]),
         )
+        assert scaled_quad.dtype == np.float32, "Scaled quadrangle must be float32"
 
         # Extract and process board
         board = utils.extract_perspective(orig_image, scaled_quad, constants.BOARD_SIZE)

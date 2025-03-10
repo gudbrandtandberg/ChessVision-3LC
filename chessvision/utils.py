@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -19,14 +20,18 @@ logger = logging.getLogger(__name__)
 def get_device() -> torch.device:
     """Get the best available device for PyTorch."""
     if torch.cuda.is_available():
+        logger.info("Using CUDA device")
         return torch.device("cuda")
     if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        logger.info("Using MPS device")
         return torch.device("mps")
+    logger.info("Using CPU device")
     return torch.device("cpu")
 
 
 def get_classifier_model(model_id: str = "resnet18") -> torch.nn.Module:
     """Initialize the piece classifier model."""
+    logger.info(f"Creating classifier model: {model_id}")
     return timm.create_model(  # type: ignore[no-any-return]
         model_id,
         num_classes=constants.NUM_CLASSES,
@@ -40,6 +45,10 @@ def load_model_checkpoint(
     device: torch.device | None = None,
 ) -> torch.nn.Module:
     """Load a model checkpoint."""
+    assert isinstance(model, torch.nn.Module), "Model must be a torch.nn.Module"
+    assert Path(checkpoint_path).exists(), f"Checkpoint not found: {checkpoint_path}"
+
+    logger.info(f"Loading checkpoint from {checkpoint_path}")
     if device is None:
         device = get_device()
 
@@ -48,25 +57,31 @@ def load_model_checkpoint(
     # Handle different checkpoint formats
     if isinstance(state_dict, dict):
         if "model_state_dict" in state_dict:
+            logger.debug("Loading model_state_dict format checkpoint")
             model.load_state_dict(state_dict["model_state_dict"])
             metadata = state_dict.get("metadata", {})
         elif "state_dict" in state_dict:
+            logger.debug("Loading timm format checkpoint")
             model.load_state_dict(state_dict["state_dict"])
             metadata = state_dict.get("metadata", {})
         else:
             if "model" in state_dict:
+                logger.debug("Loading legacy model format checkpoint")
                 model_weights = state_dict["model"]
                 metadata = state_dict.get("metadata", {})
             else:
+                logger.debug("Loading direct state dict format checkpoint")
                 model_weights = state_dict
                 metadata = {}
             model.load_state_dict(model_weights)
     else:
+        logger.debug("Loading raw state dict format checkpoint")
         model.load_state_dict(state_dict)
         metadata = {}
 
     if metadata:
         model.metadata = metadata
+        logger.debug(f"Loaded checkpoint metadata: {metadata}")
 
     return model
 
@@ -85,6 +100,10 @@ def listdir_nohidden(path: str) -> list[str]:
 
 def create_binary_mask(mask: NDArray[np.float32], threshold: float = 0.5) -> NDArray[np.uint8]:
     """Convert probability mask to binary mask."""
+    assert isinstance(mask, np.ndarray), "Mask must be a numpy array"
+    assert mask.dtype == np.float32, "Mask must be float32"
+    assert 0 <= threshold <= 1, "Threshold must be between 0 and 1"
+
     mask = mask.copy()
     mask[mask > threshold] = 255
     mask[mask <= threshold] = 0
@@ -97,6 +116,12 @@ def extract_perspective(
     out_size: tuple[int, int],
 ) -> NDArray[np.uint8]:
     """Extract a perspective-corrected region from an image."""
+    assert isinstance(image, np.ndarray), "Image must be a numpy array"
+    assert image.dtype == np.uint8, "Image must be uint8"
+    assert isinstance(approx, np.ndarray), "Approx must be a numpy array"
+    assert approx.dtype == np.float32, "Approx must be float32"
+    assert len(approx) == 4, "Approx must contain exactly 4 points"
+
     w, h = out_size[0], out_size[1]
     dest = np.array(((0, 0), (w, 0), (w, h), (0, h)), np.float32)
     approx = np.array(approx, np.float32)
@@ -119,7 +144,7 @@ def display_comparison(
     import chess.svg
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(1, 4, figsize=figsize)
+    _, axes = plt.subplots(1, 4, figsize=figsize)
     plt.subplots_adjust(wspace=0.3)
 
     plt.rcParams.update({"font.size": 16})
