@@ -6,7 +6,7 @@ import chess
 import numpy as np
 
 from chessvision import constants
-from chessvision.evaluate import (
+from scripts.eval.evaluate import (
     TopKAccuracyResult,
     board_to_labels,
     compute_position_metrics,

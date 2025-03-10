@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import io
-import logging
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -41,13 +40,6 @@ from tqdm import tqdm
 
 from chessvision import constants
 from chessvision.core import ChessVision
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(message)s",
-)
-logger = logging.getLogger("chessvision_pipeline")
 
 
 def download_raw_data(
@@ -70,8 +62,8 @@ def download_raw_data(
     Returns:
         Path to the folder containing downloaded images
     """
-    logger.info(f"Downloading images from bucket: {bucket}")
-    logger.info(f"Date range: {start_date} to {end_date}")
+    print(f"Downloading images from bucket: {bucket}")
+    print(f"Date range: {start_date} to {end_date}")
     date_folder = f"{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}"
 
     # Create output folder if not specified
@@ -80,14 +72,14 @@ def download_raw_data(
     else:
         output_folder = output_folder / date_folder
 
-    logger.info(f"Output folder: {output_folder}")
+    print(f"Output folder: {output_folder}")
 
     # Initialize S3 client
     s3_client = boto3.client("s3")
 
     if not dry_run and not output_folder.exists():
         output_folder.mkdir(parents=True)
-        logger.info(f"Created output directory: {output_folder}")
+        print(f"Created output directory: {output_folder}")
 
     total_files = 0
     current_date = start_date
@@ -109,11 +101,11 @@ def download_raw_data(
             response = s3_client.list_objects_v2(**list_kwargs)
 
             if "Contents" not in response:
-                logger.info(f"No files found with prefix: {prefix}")
+                print(f"No files found with prefix: {prefix}")
                 break
 
             files = response["Contents"]
-            logger.info(f"Processing {len(files)} files with prefix: {prefix}")
+            print(f"Processing {len(files)} files with prefix: {prefix}")
 
             for obj in tqdm(files, desc=f"Processing {prefix}"):
                 key = obj["Key"]
@@ -134,7 +126,7 @@ def download_raw_data(
         current_date += timedelta(days=1)
 
     action = "Listed" if dry_run else "Downloaded"
-    logger.info(f"{action} {total_files} files in total")
+    print(f"{action} {total_files} files in total")
 
     return output_folder
 
@@ -155,13 +147,13 @@ def create_tlc_table(
     Returns:
         Created 3LC table
     """
-    logger.info(f"Creating table from folder: {input_folder}")
+    print(f"Creating table from folder: {input_folder}")
 
     # Use the folder name as the table name
     table_name = input_folder.name.lower()
 
-    logger.info(f"Table name: {table_name}")
-    logger.info(f"Project: {project_name}, Dataset: {dataset_name}")
+    print(f"Table name: {table_name}")
+    print(f"Project: {project_name}, Dataset: {dataset_name}")
 
     table = tlc.Table.from_image_folder(
         input_folder,
@@ -176,7 +168,7 @@ def create_tlc_table(
         },
     )
 
-    logger.info(f"Table created: {table.url}")
+    print(f"Table created: {table.url}")
 
     return table
 
@@ -203,15 +195,15 @@ def enrich_tlc_table(
     if run_name is None:
         run_name = f"enrich-{table.name}"
 
-    logger.info(f"Enriching table: {table.name}")
-    logger.info(f"Run name: {run_name}")
+    print(f"Enriching table: {table.name}")
+    print(f"Run name: {run_name}")
 
     # Initialize 3LC run
     run = tlc.init(table.project_name, run_name)
 
     # Initialize ChessVision
-    logger.info("Initializing ChessVision")
-    chess_vision = ChessVision()
+    print("Initializing ChessVision")
+    chess_vision = ChessVision(lazy_load=False)
 
     # Define preprocessing function
     def preprocess_image(sample: Image.Image) -> torch.Tensor:
@@ -225,7 +217,7 @@ def enrich_tlc_table(
         return transforms(sample)  # type: ignore
 
     # Preprocess images
-    logger.info("Preprocessing images")
+    print("Preprocessing images")
     table.map(preprocess_image)
 
     # Define metrics collector
@@ -331,7 +323,7 @@ def enrich_tlc_table(
     }
 
     # Collect metrics
-    logger.info("Collecting metrics and extracting boards")
+    print("Collecting metrics and extracting boards")
     embedding_collector = tlc.EmbeddingsMetricsCollector([embedding_layer])
 
     tlc.collect_metrics(
@@ -354,10 +346,10 @@ def enrich_tlc_table(
     )
 
     # Reduce embeddings
-    logger.info("Reducing embeddings")
-    run.reduce_embeddings_by_foreign_table_url(table.url)
+    print("Reducing embeddings")
+    run.reduce_embeddings_by_foreign_table_url(table.url, method="pacmap")
 
-    logger.info(f"Enrichment complete: {run.url}")
+    print(f"Enrichment complete: {run.url}")
     return run.url
 
 
@@ -514,7 +506,7 @@ def run_pipeline(
 
     # Step 1: Download raw data
     if not skip_download:
-        logger.info("=== Step 1: Downloading raw data ===")
+        print("=== Step 1: Downloading raw data ===")
         download_start = time.time()
         download_folder = download_raw_data(
             bucket=bucket,
@@ -527,7 +519,7 @@ def run_pipeline(
         results["download_time"] = download_time
         results["download_folder"] = str(download_folder)
     else:
-        logger.info("Skipping download step")
+        print("Skipping download step")
         if output_folder is None:
             date_folder = f"{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}"
             download_folder = constants.DATA_ROOT / "new_raw" / date_folder
@@ -538,7 +530,7 @@ def run_pipeline(
 
     # Step 2: Create 3LC table
     if not skip_create_table:
-        logger.info("=== Step 2: Creating 3LC table ===")
+        print("=== Step 2: Creating 3LC table ===")
         table_start = time.time()
         table = create_tlc_table(
             input_folder=download_folder,
@@ -549,7 +541,7 @@ def run_pipeline(
         results["table_time"] = table_time
         results["table"] = table
     else:
-        logger.info("Skipping table creation step")
+        print("Skipping table creation step")
         table_name = download_folder.name.lower()
         table = tlc.Table.from_names(
             table_name,
@@ -561,7 +553,7 @@ def run_pipeline(
 
     # Step 3: Enrich 3LC table
     if not skip_enrich:
-        logger.info("=== Step 3: Enriching 3LC table ===")
+        print("=== Step 3: Enriching 3LC table ===")
         enrich_start = time.time()
         run_url = enrich_tlc_table(
             table=table,
@@ -573,7 +565,7 @@ def run_pipeline(
         results["enrich_time"] = enrich_time
         results["run_url"] = run_url
     else:
-        logger.info("Skipping enrichment step")
+        print("Skipping enrichment step")
         results["enrich_time"] = 0
         results["run_url"] = ""
 

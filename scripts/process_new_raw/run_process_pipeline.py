@@ -2,8 +2,7 @@ from datetime import datetime
 from pprint import pprint
 
 from chessvision import constants
-
-from .process_pipeline import run_pipeline
+from scripts.process_new_raw.process_pipeline import run_pipeline
 
 start_date = datetime.strptime("2024-11-03", "%Y-%m-%d").date()
 end_date = datetime.strptime("2024-11-03", "%Y-%m-%d").date()
