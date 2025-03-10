@@ -4,6 +4,7 @@ from pathlib import Path
 
 import tlc
 
+from chessvision import constants
 from chessvision.core import ChessVision
 
 # Project names
@@ -11,8 +12,8 @@ BOARD_EXTRACTION_PROJECT = "chessvision-segmentation"
 PIECE_CLASSIFICATION_PROJECT = "chessvision-classification"
 
 # Dataset paths
-BOARD_EXTRACTION_ROOT = Path(ChessVision.DATA_ROOT) / "board_extraction"
-PIECE_CLASSIFICATION_ROOT = Path(ChessVision.DATA_ROOT) / "squares"
+BOARD_EXTRACTION_ROOT = Path(constants.DATA_ROOT) / "board_extraction"
+PIECE_CLASSIFICATION_ROOT = Path(constants.DATA_ROOT) / "squares"
 
 # Board extraction config
 BOARD_EXTRACTION_PATHS = {

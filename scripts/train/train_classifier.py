@@ -15,6 +15,7 @@ import tqdm
 from PIL.Image import Image
 from torch.utils.data import DataLoader
 
+from chessvision import constants, utils
 from chessvision.core import ChessVision
 from scripts.train import config
 from scripts.train.create_classification_tables import get_or_create_tables
@@ -206,7 +207,7 @@ def train_model(
 
     # Set up metrics collection
     metrics_collectors = [
-        tlc.ClassificationMetricsCollector(classes=ChessVision.LABEL_NAMES),
+        tlc.ClassificationMetricsCollector(classes=constants.LABEL_NAMES),
         tlc.EmbeddingsMetricsCollector(layers=[HIDDEN_LAYER_INDEX]),
     ]
 
@@ -358,10 +359,10 @@ if __name__ == "__main__":
     if args.deterministic:
         set_deterministic_mode(args.seed)
 
-    device = ChessVision.get_device()
+    device = utils.get_device()
     logger.info(f"Using device {device}")
 
-    model = ChessVision.get_classifier_model()
+    model = utils.get_classifier_model()
     model = model.to(device)
 
     run, checkpoint_path = train_model(

@@ -4,6 +4,7 @@ import tlc
 import torch
 from torch.utils.data import random_split
 
+from chessvision import constants
 from chessvision.core import ChessVision
 from chessvision.pytorch_unet.utils.data_loading import BasicDataset
 from scripts.train import config
@@ -53,7 +54,7 @@ def create_tables() -> dict[str, tlc.Table]:
         "image": tlc.PILImage("image"),
         "mask": tlc.SegmentationPILImage(
             "mask",
-            classes=ChessVision.SEGMENTATION_MAP,
+            classes=constants.SEGMENTATION_MAP,
         ),
     }
 

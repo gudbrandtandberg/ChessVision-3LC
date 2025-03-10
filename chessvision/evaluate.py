@@ -18,13 +18,14 @@ from numpy.typing import NDArray
 from PIL import Image
 from tqdm import tqdm
 
-from chessvision.core import ChessVision
+from . import constants, utils
+from .core import ChessVision
 
 logger = logging.getLogger(__name__)
 
-TEST_DATA_DIR = Path(ChessVision.DATA_ROOT) / "test"
+TEST_DATA_DIR = Path(constants.DATA_ROOT) / "test"
 PROJECT_NAME = "chessvision-testing"
-LABEL_NAMES = ChessVision.LABEL_NAMES
+LABEL_NAMES = constants.LABEL_NAMES
 
 
 @dataclass
@@ -141,11 +142,11 @@ def compute_position_metrics(
     # Get true labels from FEN
     true_board = chess.Board(true_fen + " w KQkq - 0 1")  # Add dummy values for full FEN
     true_labels = board_to_labels(true_board)
-    true_labels_indices = [ChessVision.LABEL_INDICES[label] for label in true_labels]
+    true_labels_indices = [constants.LABEL_INDICES[label] for label in true_labels]
 
     # Get predicted labels
     predicted_labels_indices = np.argmax(predictions, axis=1).tolist()
-    predicted_labels = [ChessVision.LABEL_NAMES[idx] for idx in predicted_labels_indices]
+    predicted_labels = [constants.LABEL_NAMES[idx] for idx in predicted_labels_indices]
 
     # Compute accuracies
     top_k = compute_top_k_accuracy(predictions, true_labels, k=k)
@@ -160,7 +161,7 @@ def compute_position_metrics(
 
 
 def get_test_generator(image_dir: Path) -> Generator[tuple[str, np.ndarray], None, None]:
-    img_filenames = ChessVision._listdir_nohidden(str(image_dir))
+    img_filenames = utils.listdir_nohidden(str(image_dir))
     test_imgs = np.array([cv2.imread(str(image_dir / x)) for x in img_filenames])
 
     for i in range(len(test_imgs)):
@@ -234,7 +235,7 @@ def evaluate_model(
     top_3_accuracy = 0.0
 
     times = []
-    test_set_size = len(ChessVision._listdir_nohidden(str(image_folder)))
+    test_set_size = len(utils.listdir_nohidden(str(image_folder)))
     extraction_failures = 0
 
     with tlc.bulk_data_url_context(run.bulk_data_url, metrics_writer.url):
@@ -254,12 +255,12 @@ def evaluate_model(
                 metrics_batch = {
                     "raw_img": [str(image_folder / filename)],
                     "predicted_masks": [str(predicted_mask_url)],
-                    "extracted_board": [str(ChessVision.BLACK_BOARD_PATH)],
+                    "extracted_board": [str(constants.BLACK_BOARD_PATH)],
                     "rendered_board": [""],
                     "example_id": [index],
                     "is_failed": [True],
                     "accuracy": [0.0],
-                    "square_crop": [ChessVision.BLACK_SQUARE_PATH],
+                    "square_crop": [constants.BLACK_SQUARE_PATH],
                     "true_labels": [0],
                     "predicted_labels": [0],
                 }

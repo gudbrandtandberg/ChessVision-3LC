@@ -13,15 +13,17 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torchvision import transforms as T  # noqa: N812
 from tqdm import tqdm
-from training_utils import set_deterministic_mode, worker_init_fn
-from unet_loss_collector import LossCollector
 
+from chessvision import constants, utils
 from chessvision.core import ChessVision
 from chessvision.pytorch_unet.evaluate import evaluate
 from chessvision.pytorch_unet.unet import UNet
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
 from scripts.train import config
 from scripts.train.create_board_extraction_tables import get_or_create_tables
+
+from .training_utils import set_deterministic_mode, worker_init_fn
+from .unet_loss_collector import LossCollector
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +206,7 @@ def train_model(
     metrics_collectors = [
         LossCollector(),
         tlc.SegmentationMetricsCollector(
-            label_map=ChessVision.SEGMENTATION_MAP,
+            label_map=constants.SEGMENTATION_MAP,
             preprocess_fn=PrepareModelOutputsForLogging(threshold=threshold),
         ),
         tlc.EmbeddingsMetricsCollector(layers=[52]),
@@ -442,7 +444,7 @@ if __name__ == "__main__":
     if args.deterministic:
         set_deterministic_mode(args.seed)
 
-    device = ChessVision.get_device()
+    device = utils.get_device()
     logger.info(f"Using device {device}")
 
     model: torch.nn.Module = UNet(
@@ -453,9 +455,9 @@ if __name__ == "__main__":
     model.to(device=device)
 
     if args.load:
-        model = ChessVision.load_model_checkpoint(
+        model = utils.load_model_checkpoint(
             model,
-            ChessVision.EXTRACTOR_WEIGHTS,
+            constants.EXTRACTOR_WEIGHTS,
             device,
         )
 

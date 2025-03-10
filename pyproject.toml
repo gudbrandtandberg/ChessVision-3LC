@@ -138,7 +138,6 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 exclude = [
-    "scripts/.*",
     "chessvision/pytorch_unet/.*",
     "app/*",
     ".venv/*",
@@ -146,7 +145,7 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["cv2.*", "timm.*", "torch.*", "torchvision.*"]
+module = ["cv2.*", "timm.*", "torch.*", "torchvision.*", "boto3.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

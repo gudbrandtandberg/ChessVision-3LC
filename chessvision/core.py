@@ -15,6 +15,7 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from numpy.typing import NDArray
 
+from . import constants, utils
 from .cv_types import BoardExtractionResult, ChessVisionResult, PositionResult
 from .pytorch_unet.unet.unet_model import UNet
 
@@ -23,104 +24,6 @@ logger = logging.getLogger(__name__)
 
 class ChessVision:
     """Main class for chess position detection from images."""
-
-    # Root paths
-    CVROOT = os.getenv("CVROOT", Path(__file__).parent.parent.as_posix())
-    DATA_ROOT = (Path(CVROOT) / "data").as_posix()
-
-    # Resource paths
-    BLACK_BOARD_PATH = (Path(DATA_ROOT) / "board_extraction" / "black_board.png").as_posix()
-    BLACK_SQUARE_PATH = (Path(DATA_ROOT) / "squares" / "black_square.png").as_posix()
-
-    # Model configuration
-    NUM_CLASSES = 13
-
-    # Image sizes
-    INPUT_SIZE = (256, 256)
-    BOARD_SIZE = (512, 512)
-    PIECE_SIZE = (64, 64)
-
-    # Label mappings
-    LABEL_NAMES = ["B", "K", "N", "P", "Q", "R", "b", "k", "n", "p", "q", "r", "f"]
-    LABEL_INDICES = {label: idx for idx, label in enumerate(LABEL_NAMES)}
-    LABEL_DESCRIPTIONS = [
-        "White Bishop",
-        "White King",
-        "White Knight",
-        "White Pawn",
-        "White Queen",
-        "White Rook",
-        "Black Bishop",
-        "Black King",
-        "Black Knight",
-        "Black Pawn",
-        "Black Queen",
-        "Black Rook",
-        "Empty Square",
-        "Unknown",
-    ]
-
-    # Segmentation mapping
-    SEGMENTATION_MAP = {0: "background", 255: "chessboard"}
-
-    # Model weights paths
-    WEIGHTS_DIR = Path(CVROOT) / "weights"
-    CLASSIFIER_WEIGHTS = str(WEIGHTS_DIR / "best_classifier.pth")
-    EXTRACTOR_WEIGHTS = str(WEIGHTS_DIR / "best_extractor.pth")
-
-    # Chess board constants
-    DARK_SQUARES = {
-        "a1",
-        "c1",
-        "e1",
-        "g1",
-        "b2",
-        "d2",
-        "f2",
-        "h2",
-        "a3",
-        "c3",
-        "e3",
-        "g3",
-        "b4",
-        "d4",
-        "f4",
-        "h4",
-        "a5",
-        "c5",
-        "e5",
-        "g5",
-        "b6",
-        "d6",
-        "f6",
-        "h6",
-        "a7",
-        "c7",
-        "e7",
-        "g7",
-        "b8",
-        "d8",
-        "f8",
-        "h8",
-    }
-    INVALID_PAWN_SQUARES = {
-        "a1",
-        "b1",
-        "c1",
-        "d1",
-        "e1",
-        "f1",
-        "g1",
-        "h1",
-        "a8",
-        "b8",
-        "c8",
-        "d8",
-        "e8",
-        "f8",
-        "g8",
-        "h8",
-    }
 
     def __init__(
         self,
@@ -138,36 +41,15 @@ class ChessVision:
             lazy_load: If True, models are loaded only when needed.
                       If False, models are loaded immediately.
         """
-        self.device = self.get_device()
+        self.device = utils.get_device()
         self._board_extractor: torch.nn.Module | None = None
         self._classifier: torch.nn.Module | None = None
-        self._board_extractor_weights = board_extractor_weights or self.EXTRACTOR_WEIGHTS
-        self._classifier_weights = classifier_weights or self.CLASSIFIER_WEIGHTS
+        self._board_extractor_weights = board_extractor_weights or constants.EXTRACTOR_WEIGHTS
+        self._classifier_weights = classifier_weights or constants.CLASSIFIER_WEIGHTS
 
         if not lazy_load:
             self._initialize_board_extractor()
             self._initialize_classifier()
-
-    @staticmethod
-    def get_device() -> torch.device:
-        """Get the best available device for PyTorch."""
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return torch.device("mps")
-        return torch.device("cpu")
-
-    @staticmethod
-    def _ratio(a: float, b: float) -> float:
-        """Calculate ratio between two numbers."""
-        if a == 0 or b == 0:
-            return -1
-        return min(a, b) / float(max(a, b))
-
-    @staticmethod
-    def _listdir_nohidden(path: str) -> list[str]:
-        """List directory contents, excluding hidden files."""
-        return [f for f in os.listdir(path) if not f.startswith(".")]
 
     @property
     def board_extractor(self) -> torch.nn.Module:
@@ -190,7 +72,7 @@ class ChessVision:
         logger.info("Initializing board extraction model...")
         self._board_extractor = UNet(n_channels=3, n_classes=1)
         self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)  # type: ignore
-        self._board_extractor = self.load_model_checkpoint(
+        self._board_extractor = utils.load_model_checkpoint(
             self._board_extractor,  # type: ignore
             self._board_extractor_weights,
             self.device,
@@ -201,8 +83,8 @@ class ChessVision:
     def _initialize_classifier(self) -> None:
         """Initialize the piece classifier model."""
         logger.info("Initializing piece classifier model...")
-        self._classifier = ChessVision.get_classifier_model()
-        self._classifier = ChessVision.load_model_checkpoint(self._classifier, self._classifier_weights, self.device)
+        self._classifier = utils.get_classifier_model()
+        self._classifier = utils.load_model_checkpoint(self._classifier, self._classifier_weights, self.device)
         self._classifier.eval()
         self._classifier.to(self.device)
 
@@ -255,7 +137,7 @@ class ChessVision:
             BoardExtractionResult containing extraction results
         """
         # Resize image
-        comp_image = cv2.resize(image, ChessVision.INPUT_SIZE, interpolation=cv2.INTER_AREA)
+        comp_image = cv2.resize(image, constants.INPUT_SIZE, interpolation=cv2.INTER_AREA)
 
         # Prepare image for model
         image_batch = torch.Tensor(np.array([comp_image])) / 255
@@ -283,7 +165,7 @@ class ChessVision:
             PositionResult containing classification results
         """
         # Extract individual squares
-        squares, square_names = ChessVision._extract_squares(board_image, flip)
+        squares, square_names = self._extract_squares(board_image, flip)
 
         # Prepare batch for model
         batch = torch.Tensor(squares).permute(0, 3, 1, 2).to(self.device)
@@ -320,7 +202,7 @@ class ChessVision:
         probabilities = torch.sigmoid(torch.tensor(logits)).numpy()
 
         # Create binary mask
-        binary_mask = ChessVision._create_binary_mask(probabilities, threshold)
+        binary_mask = utils.create_binary_mask(probabilities, threshold)
 
         # Find quadrangle in mask
         quadrangle = ChessVision._find_quadrangle(binary_mask)
@@ -339,7 +221,7 @@ class ChessVision:
         scaled_quad = ChessVision._scale_quadrangle(quadrangle, (orig_image.shape[0], orig_image.shape[1]))
 
         # Extract and process board
-        board = ChessVision._extract_perspective(orig_image, scaled_quad, ChessVision.BOARD_SIZE)
+        board = utils.extract_perspective(orig_image, scaled_quad, constants.BOARD_SIZE)
         if len(board.shape) == 3:  # If image has multiple channels
             board = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
         board = cv2.flip(board, 1)  # TODO: permute approximation instead
@@ -375,7 +257,7 @@ class ChessVision:
 
         # Get initial predictions
         initial_predictions = np.argmax(predictions, axis=1)
-        pred_labels = [ChessVision.LABEL_NAMES[p] for p in initial_predictions]
+        pred_labels = [constants.LABEL_NAMES[p] for p in initial_predictions]
 
         # Apply chess logic to fix potential errors
         pred_labels = ChessVision._validate_position(pred_labels, predictions, square_names)
@@ -394,14 +276,6 @@ class ChessVision:
             square_names=square_names,
             confidence_scores=confidence_scores,
         )
-
-    @staticmethod
-    def _create_binary_mask(mask: NDArray[np.uint8], threshold: float = 0.5) -> NDArray[np.uint8]:
-        """Convert probability mask to binary mask."""
-        mask = mask.copy()  # Create a copy to avoid modifying the original
-        mask[mask > threshold] = 255
-        mask[mask <= threshold] = 0
-        return mask.astype(np.uint8)
 
     @staticmethod
     def _find_quadrangle(mask: NDArray[np.uint8]) -> NDArray[np.uint32] | None:
@@ -442,7 +316,7 @@ class ChessVision:
                 continue
 
             _, _, w, h = cv2.boundingRect(contour)
-            if ChessVision._ratio(h, w) < min_ratio_bounding:
+            if utils.ratio(h, w) < min_ratio_bounding:
                 continue
 
             filtered.append(contour)
@@ -461,20 +335,6 @@ class ChessVision:
         """Scale quadrangle approximation to match original image size."""
         sf = orig_size[0] / 256.0
         return np.array(approx * sf, dtype=np.uint32)
-
-    @staticmethod
-    def _extract_perspective(
-        image: NDArray[np.uint8],
-        approx: NDArray[np.uint8],
-        out_size: tuple[int, int],
-    ) -> NDArray[np.uint8]:
-        """Extract a perspective-corrected region from an image."""
-        w, h = out_size[0], out_size[1]
-        dest = np.array(((0, 0), (w, 0), (w, h), (0, h)), np.float32)
-        approx = np.array(approx, np.float32)
-
-        coeffs = cv2.getPerspectiveTransform(approx, dest)
-        return cv2.warpPerspective(image, coeffs, out_size)
 
     @staticmethod
     def _extract_squares(
@@ -542,10 +402,10 @@ class ChessVision:
 
         # Fix pawns on first/last rank
         for i, (label, name) in enumerate(zip(pred_labels, square_names)):
-            if name in ChessVision.INVALID_PAWN_SQUARES and label in ["P", "p"]:
+            if name in constants.INVALID_PAWN_SQUARES and label in ["P", "p"]:
                 # Get next best prediction that isn't a pawn
                 for alt_idx in argsorted_probs[i][::-1]:
-                    alt_piece = ChessVision.LABEL_NAMES[alt_idx]
+                    alt_piece = constants.LABEL_NAMES[alt_idx]
                     if alt_piece not in ["P", "p"]:
                         pred_labels[i] = alt_piece
                         break
@@ -557,10 +417,10 @@ class ChessVision:
         # Find all bishops
         for i, (label, name) in enumerate(zip(pred_labels, square_names)):
             if label == "B":
-                color = "dark" if name in ChessVision.DARK_SQUARES else "light"
+                color = "dark" if name in constants.DARK_SQUARES else "light"
                 white_bishops[color].append((i, sorted_probs[i][-1]))
             elif label == "b":
-                color = "dark" if name in ChessVision.DARK_SQUARES else "light"
+                color = "dark" if name in constants.DARK_SQUARES else "light"
                 black_bishops[color].append((i, sorted_probs[i][-1]))
 
         # Fix duplicate bishops
@@ -572,7 +432,7 @@ class ChessVision:
                     # Change others to next best prediction
                     for idx, _ in bishops[color][1:]:
                         for alt_idx in argsorted_probs[idx][::-1]:
-                            alt_piece = ChessVision.LABEL_NAMES[alt_idx]
+                            alt_piece = constants.LABEL_NAMES[alt_idx]
                             if alt_piece not in ["B", "b"]:
                                 pred_labels[idx] = alt_piece
                                 break
@@ -588,7 +448,7 @@ class ChessVision:
         """
         return timm.create_model(  # type: ignore
             model_id,
-            num_classes=ChessVision.NUM_CLASSES,
+            num_classes=constants.NUM_CLASSES,
             in_chans=1,
         )
 
@@ -613,7 +473,7 @@ class ChessVision:
             Model with loaded weights
         """
         if device is None:
-            device = ChessVision.get_device()
+            device = utils.get_device()
 
         state_dict = torch.load(checkpoint_path, map_location=device)
 

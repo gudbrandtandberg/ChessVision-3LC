@@ -6,14 +6,14 @@ import tlc
 import torch
 import torch.nn as nn
 
-from chessvision.core import ChessVision
+from chessvision import utils
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
 
 
 class LossCollector(tlc.MetricsCollector):
     def __init__(self) -> None:
         super().__init__()
-        self.device = ChessVision.get_device()
+        self.device = utils.get_device()
 
     def compute_metrics(self, batch: dict[str, Any], predictor_output: tlc.PredictorOutput) -> dict[str, Any]:
         predictions = predictor_output.forward

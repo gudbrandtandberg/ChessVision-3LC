@@ -17,12 +17,15 @@ Example usage:
     python process_pipeline.py --start_date 2024-11-01 --skip_download --skip_enrich
 """
 
+from __future__ import annotations
+
 import argparse
 import io
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import boto3
 import cairosvg
@@ -36,6 +39,7 @@ import torchvision.transforms.v2 as v2
 from PIL import Image
 from tqdm import tqdm
 
+from chessvision import constants, utils
 from chessvision.core import ChessVision
 
 # Configure logging
@@ -48,8 +52,8 @@ logger = logging.getLogger("chessvision_pipeline")
 
 def download_raw_data(
     bucket: str,
-    start_date: datetime.date,
-    end_date: datetime.date,
+    start_date: date,
+    end_date: date,
     output_folder: Path | None = None,
     dry_run: bool = False,
 ) -> Path:
@@ -72,7 +76,7 @@ def download_raw_data(
 
     # Create output folder if not specified
     if output_folder is None:
-        output_folder = Path(ChessVision.DATA_ROOT) / "new_raw" / date_folder
+        output_folder = Path(constants.DATA_ROOT) / "new_raw" / date_folder
     else:
         output_folder = output_folder / date_folder
 
@@ -168,7 +172,7 @@ def create_tlc_table(
         project_name=project_name,
         if_exists="overwrite",
         extra_columns={
-            "mask": tlc.SegmentationPILImage("mask", classes=ChessVision.SEGMENTATION_MAP),
+            "mask": tlc.SegmentationPILImage("mask", classes=constants.SEGMENTATION_MAP),
         },
     )
 
@@ -182,7 +186,7 @@ def enrich_tlc_table(
     run_name: str | None = None,
     threshold: float = 0.5,
     embedding_layer: int = 52,
-) -> str:
+) -> tlc.Url:
     """
     Enrich a 3LC table with chess board extraction metrics.
 
@@ -210,7 +214,7 @@ def enrich_tlc_table(
     chess_vision = ChessVision()
 
     # Define preprocessing function
-    def preprocess_image(sample):
+    def preprocess_image(sample: Image.Image) -> torch.Tensor:
         transforms = v2.Compose(
             [
                 v2.ToImage(),
@@ -225,7 +229,10 @@ def enrich_tlc_table(
     table.map(preprocess_image)
 
     # Define metrics collector
-    def custom_metrics_collector(batch, predictor_output):
+    def custom_metrics_collector(
+        batch: list[torch.Tensor],
+        predictor_output: tlc.PredictorOutput,
+    ) -> dict[str, list[Any]]:
         """Extract boards and collect metrics from batch of images."""
         logits = predictor_output.forward
         batch_size = logits.shape[0]
@@ -256,7 +263,7 @@ def enrich_tlc_table(
             position_result = None
 
             # Create default black images
-            black_image_gray = Image.open(ChessVision.BLACK_SQUARE_PATH)
+            black_image_gray = Image.open(constants.BLACK_SQUARE_PATH)
 
             # Process board if found
             if board_result.board_image is not None:
@@ -271,7 +278,7 @@ def enrich_tlc_table(
 
                 png_data = cairosvg.svg2png(bytestring=svg_data.encode())
                 board_image = Image.open(io.BytesIO(png_data))
-                board_image = board_image.resize(ChessVision.BOARD_SIZE)
+                board_image = board_image.resize(constants.BOARD_SIZE)
 
                 # Add successful extraction results
                 rendered_boards.append(board_image)
@@ -316,7 +323,10 @@ def enrich_tlc_table(
         "distribution": tlc.Float("distribution"),
         "extracted": tlc.PILImage("extracted"),
         "probs": tlc.PILImage("probs"),
-        "predicted_mask": tlc.SegmentationPILImage("predicted_mask", classes=ChessVision.SEGMENTATION_MAP),
+        "predicted_mask": tlc.SegmentationPILImage(
+            "predicted_mask",
+            classes=constants.SEGMENTATION_MAP,
+        ),
         "board": tlc.PILImage("board"),
     }
 
@@ -351,7 +361,7 @@ def enrich_tlc_table(
     return run.url
 
 
-def probability_distribution(mask):
+def probability_distribution(mask: np.ndarray) -> float:
     """
     Analyze the distribution of probabilities in the mask.
 
@@ -367,14 +377,14 @@ def probability_distribution(mask):
 
     # Ideal distribution has values concentrated at 0 and 1
     # Calculate entropy (lower entropy means more concentrated distribution)
-    entropy = -np.sum(hist * np.log2(hist + 1e-10))
-    max_entropy = -np.log2(1 / 10)  # Maximum entropy for 10 bins
+    entropy: float = -np.sum(hist * np.log2(hist + 1e-10))
+    max_entropy: float = -np.log2(1 / 10)  # Maximum entropy for 10 bins
 
     # Convert to score (1 - normalized entropy)
     return 1.0 - (entropy / max_entropy)
 
 
-def mask_completeness(mask):
+def mask_completeness(mask: np.ndarray) -> float:
     """
     Measure how complete and solid the mask is.
 
@@ -401,8 +411,8 @@ def mask_completeness(mask):
     cv2.drawContours(filled_mask, [largest_contour], 0, 1, -1)
 
     # Calculate the ratio of the original mask area to the filled contour area
-    original_area = np.sum(binary_mask)
-    filled_area = np.sum(filled_mask)
+    original_area: float = np.sum(binary_mask)
+    filled_area: float = np.sum(filled_mask)
 
     if filled_area == 0:
         return 0.0
@@ -465,8 +475,8 @@ def probability_confidence(probabilities: np.ndarray) -> float:
 
 
 def run_pipeline(
-    start_date: datetime.date,
-    end_date: datetime.date,
+    start_date: date,
+    end_date: date,
     bucket: str = "chessvision-bucket",
     output_folder: Path | None = None,
     project_name: str = "chessvision-new-raw",
@@ -500,7 +510,7 @@ def run_pipeline(
     Returns:
         Dictionary with results from each step
     """
-    results = {}
+    results: dict[str, Any] = {}
 
     # Step 1: Download raw data
     if not skip_download:
@@ -515,15 +525,15 @@ def run_pipeline(
         )
         download_time = time.time() - download_start
         results["download_time"] = download_time
-        results["download_folder"] = download_folder
+        results["download_folder"] = str(download_folder)
     else:
         logger.info("Skipping download step")
         if output_folder is None:
             date_folder = f"{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}"
-            download_folder = Path(ChessVision.DATA_ROOT) / "new_raw" / date_folder
+            download_folder = Path(constants.DATA_ROOT) / "new_raw" / date_folder
         else:
             download_folder = output_folder
-        results["download_folder"] = download_folder
+        results["download_folder"] = str(download_folder)
         results["download_time"] = 0
 
     # Step 2: Create 3LC table
@@ -565,12 +575,12 @@ def run_pipeline(
     else:
         logger.info("Skipping enrichment step")
         results["enrich_time"] = 0
-        results["run_url"] = None
+        results["run_url"] = ""
 
     return results
 
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="Run the complete chess vision processing pipeline.",

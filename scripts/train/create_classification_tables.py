@@ -5,6 +5,7 @@ import logging
 import tlc
 import torchvision.datasets as datasets
 
+from chessvision import constants, utils
 from chessvision.core import ChessVision
 from scripts.train import config
 
@@ -29,7 +30,10 @@ def create_tables() -> dict[str, tlc.Table]:
     logger.info(f"Found {len(val_dataset)} validation images")
 
     # Define table structure
-    sample_structure = (tlc.PILImage("image"), tlc.CategoricalLabel("label", classes=ChessVision.LABEL_NAMES))
+    sample_structure = (
+        tlc.PILImage("image"),
+        tlc.CategoricalLabel("label", classes=constants.LABEL_NAMES),
+    )
 
     # Create tables
     tables = {}
