@@ -174,3 +174,11 @@ exclude_lines = [
 minversion = "7.0"
 addopts = "--cov=chessvision --cov-report=term-missing --cov-report=xml"
 testpaths = ["tests"]
+
+[tool.uv.sources]
+ultralytics = { git = "https://github.com/3lc-ai/ultralytics.git" }
+
+[dependency-groups]
+yolo = [
+    "ultralytics",
+]
