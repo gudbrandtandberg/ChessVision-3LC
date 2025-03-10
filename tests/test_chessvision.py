@@ -1,6 +1,5 @@
 """High-level API tests for ChessVision."""
 
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -18,7 +17,7 @@ def cv_model() -> ChessVision:
 @pytest.fixture
 def test_image() -> np.ndarray:
     """Load a test image from the test data directory."""
-    test_image_path = Path(constants.DATA_ROOT) / "test" / "raw" / "1bf29f73-bc30-448b-a894-bd6428754a0c.JPG"
+    test_image_path = constants.DATA_ROOT / "test" / "raw" / "1bf29f73-bc30-448b-a894-bd6428754a0c.JPG"
     if not test_image_path.exists():
         pytest.skip(f"Test image not found at {test_image_path}")
     return cv2.imread(str(test_image_path))

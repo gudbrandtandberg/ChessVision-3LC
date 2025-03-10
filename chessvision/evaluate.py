@@ -21,7 +21,7 @@ from chessvision import ChessVision, constants, utils
 
 logger = logging.getLogger(__name__)
 
-TEST_DATA_DIR = Path(constants.DATA_ROOT) / "test"
+TEST_DATA_DIR = constants.DATA_ROOT / "test"
 
 
 @dataclass

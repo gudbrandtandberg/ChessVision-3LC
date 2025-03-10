@@ -1,6 +1,5 @@
 """Training configuration and constants."""
 
-from pathlib import Path
 
 import tlc
 
@@ -12,8 +11,8 @@ PIECE_CLASSIFICATION_PROJECT = "chessvision-classification"
 YOLO_CLASSIFICATION_PROJECT = "chessvision-yolo-classification"
 
 # Dataset paths
-BOARD_EXTRACTION_ROOT = Path(constants.DATA_ROOT) / "board_extraction"
-PIECE_CLASSIFICATION_ROOT = Path(constants.DATA_ROOT) / "squares"
+BOARD_EXTRACTION_ROOT = constants.DATA_ROOT / "board_extraction"
+PIECE_CLASSIFICATION_ROOT = constants.DATA_ROOT / "squares"
 
 # Board extraction config
 BOARD_EXTRACTION_PATHS = {

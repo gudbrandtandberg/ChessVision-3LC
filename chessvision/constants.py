@@ -5,11 +5,11 @@ from pathlib import Path
 
 # Root paths
 CVROOT = os.getenv("CVROOT", Path(__file__).parent.parent.as_posix())
-DATA_ROOT = (Path(CVROOT) / "data").as_posix()
+DATA_ROOT = Path(CVROOT) / "data"
 
 # Resource paths
-BLACK_BOARD_PATH = (Path(DATA_ROOT) / "board_extraction" / "black_board.png").as_posix()
-BLACK_SQUARE_PATH = (Path(DATA_ROOT) / "squares" / "black_square.png").as_posix()
+BLACK_BOARD_PATH = (DATA_ROOT / "board_extraction" / "black_board.png").as_posix()
+BLACK_SQUARE_PATH = (DATA_ROOT / "squares" / "black_square.png").as_posix()
 
 # Model configuration
 NUM_CLASSES = 13

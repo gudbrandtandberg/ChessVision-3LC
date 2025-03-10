@@ -9,8 +9,6 @@ who want to understand the data flow and transformations.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import cv2
 import numpy as np
 import torch
@@ -75,7 +73,7 @@ def main() -> None:
 
     # 2. Load and Process Image
     print("\n=== Image Loading and Preprocessing ===")
-    test_image_path = Path(constants.DATA_ROOT) / "test" / "raw" / "3cb7e9ca-0549-4072-a0ef-ae5ea82174e6.JPG"
+    test_image_path = constants.DATA_ROOT / "test" / "raw" / "3cb7e9ca-0549-4072-a0ef-ae5ea82174e6.JPG"
     print(f"Loading image: {test_image_path}")
 
     original_img = cv2.imread(str(test_image_path))

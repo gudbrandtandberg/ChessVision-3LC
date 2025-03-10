@@ -76,7 +76,7 @@ def download_raw_data(
 
     # Create output folder if not specified
     if output_folder is None:
-        output_folder = Path(constants.DATA_ROOT) / "new_raw" / date_folder
+        output_folder = constants.DATA_ROOT / "new_raw" / date_folder
     else:
         output_folder = output_folder / date_folder
 
@@ -530,7 +530,7 @@ def run_pipeline(
         logger.info("Skipping download step")
         if output_folder is None:
             date_folder = f"{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}"
-            download_folder = Path(constants.DATA_ROOT) / "new_raw" / date_folder
+            download_folder = constants.DATA_ROOT / "new_raw" / date_folder
         else:
             download_folder = output_folder
         results["download_folder"] = str(download_folder)
