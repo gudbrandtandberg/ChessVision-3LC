@@ -47,7 +47,7 @@ which I build with my team at 3lc.ai.
 - Ensure submodules are checked out: `git submodule update --init`
 - Create a virtual environment: `python -m venv .venv`
 - Activate the virtual environment: `source .venv/bin/activate`
-- Install dependencies: `pip install -e .`
+- Install dependencies: `pip install -e .[yolo]`
 - Set up 3LC: [3LC Quickstart](https://docs.3lc.ai/3lc/latest/quickstart/quickstart.html)
 
 ## Examples

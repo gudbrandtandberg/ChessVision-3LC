@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 dependencies = [
@@ -38,6 +39,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+yolo = [
+    "ultralytics",
+]
+
+
+[dependency-groups]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov",
@@ -47,7 +54,11 @@ dev = [
     "types-tqdm",
     "jupyter",
     "ipywidgets",
+    "mypy==1.14",
 ]
+
+[tool.uv.sources]
+ultralytics = { git = "https://github.com/3lc-ai/ultralytics.git" }
 
 [tool.ruff]
 # Same as Black.
@@ -175,10 +186,3 @@ minversion = "7.0"
 addopts = "--cov=chessvision --cov-report=term-missing --cov-report=xml"
 testpaths = ["tests"]
 
-[tool.uv.sources]
-ultralytics = { git = "https://github.com/3lc-ai/ultralytics.git" }
-
-[dependency-groups]
-yolo = [
-    "ultralytics",
-]
