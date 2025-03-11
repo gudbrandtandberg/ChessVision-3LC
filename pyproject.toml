@@ -48,13 +48,15 @@ yolo = [
 dev = [
     "pytest>=7.0.0",
     "pytest-cov",
-    "black",
     "ruff",
     "mypy",
     "types-tqdm",
     "jupyter",
     "ipywidgets",
     "mypy==1.14",
+]
+viz = [
+    "plotly>=6.0.0",
 ]
 
 [tool.uv.sources]
@@ -149,7 +151,7 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 exclude = [
-    "chessvision/pytorch_unet/.*",
+    "chessvision/pytorch_unet/*",
     "app/*",
     ".venv/*",
     "notebooks/*",

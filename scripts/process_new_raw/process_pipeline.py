@@ -96,7 +96,7 @@ def download_raw_data(
                 "MaxKeys": 1000,  # AWS default is 1000, but being explicit
             }
             if continuation_token:
-                list_kwargs["ContinuationToken"] = continuation_token
+                list_kwargs["ContinuationToken"] = continuation_token  # type: ignore[unreachable]
 
             response = s3_client.list_objects_v2(**list_kwargs)
 
