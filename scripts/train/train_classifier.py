@@ -353,7 +353,7 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
     if args.deterministic:
         set_deterministic_mode(args.seed)

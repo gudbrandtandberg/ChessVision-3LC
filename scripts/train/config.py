@@ -1,6 +1,5 @@
 """Training configuration and constants."""
 
-
 import tlc
 
 from chessvision import constants

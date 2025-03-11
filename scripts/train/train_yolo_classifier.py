@@ -67,7 +67,7 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
     args = parse_args()
 
