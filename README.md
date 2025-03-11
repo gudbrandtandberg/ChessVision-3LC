@@ -17,12 +17,12 @@ working with:
 - Model training and evaluation
 - Performance monitoring and analysis
 
-The [3LC](https://3lc.ai) data platform, built by the incredible team at 3LC AI, serves as the perfect tool for data collection, data selection, labeling, and monitoring the performance of the system.
+The [3LC](https://3lc.ai) data platform, built by the incredible team at 3LC AI, serves as a perfect tool and companion in solving many challenges, such as data selection (using metrics analysis and dataset lineage), model-assisted labeling (using the powerful 3LC Dashboard web application), evaluating and tracking model performance over time, fine tuning the training data using sample weights (resulting in faster convergence and shorter training time), and many more.
 
 ## Features
 
 - Chessboard segmentation using a UNet model
-- Chess piece classification using either a YOLO model, or a timm-based model
+- Chess piece classification using a YOLO model or a timm-based model
 - API for image processing
 - Web interface for uploading and analyzing chess images
 
@@ -48,34 +48,31 @@ cd ChessVision-3LC
 git submodule update --init
 ```
 
-### 2. Create Virtual Environment
+### 2A.Setup using uv (recommended)
+
+Choose either approach:
+
+#### Option A: Using uv (Recommended - Faster)
+```bash
+
+# Install uv on macOS and Linux.
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows: follow instructions at https://github.com/astral-sh/uv?tab=readme-ov-file#installation
+
+# Install dependencies
+uv sync --all-extras
+```
+
+#### Option B: Using venv and pip
 
 ```bash
 # Create a new virtual environment
 python -m venv .venv
 
 # Activate the environment
-# On Windows (Git Bash):
-source .venv/Scripts/activate
-# On Unix/MacOS:
 source .venv/bin/activate
-```
 
-### 3. Install Dependencies
-
-Choose either approach:
-
-#### Option A: Using uv (Recommended - Faster)
-```bash
-# Install uv
-pip install uv
-
-# Install dependencies
-uv pip install -e ".[dev,viz,yolo]"
-```
-
-#### Option B: Using pip
-```bash
 # Install in editable mode with all dependency groups
 pip install -e ".[dev,viz,yolo]"
 ```
@@ -83,7 +80,7 @@ pip install -e ".[dev,viz,yolo]"
 ### 4. Set up 3LC
 
 1. Get your API key:
-   - Go to [accounts.3lc.ai](https://accounts.3lc.ai)
+   - Go to [account.3lc.ai](https://accounts.3lc.ai)
    - Copy your API key
 
 2. Login to 3LC:
@@ -103,16 +100,24 @@ python -c "from chessvision import ChessVision; print('Installation successful!'
 
 # Verify PyTorch installation
 python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+
+# Check if mps is available
+python -c "import torch; print('MPS available:', torch.backends.mps.is_available())"
+
+# Run tests (requires trained models)
+pytest tests/
 ```
 
-## Examples
+## Exampless
+
+**Note:** You must have trained models in the weights directory to run the examples. See the [Training](#training) section for more details.
 
 ### Quick Start
-
+s
 For a quick end-to-end overview of the system, run the Jupyter notebook:
 
 ```bash
-jupyter notebook examples/quickstart-example.ipynb
+code examples/quickstart-example.ipynb
 ```
 
 ### Detailed Pipeline
@@ -127,8 +132,19 @@ python examples/detailed-example.py
 
 Main scripts for training and evaluating the models are located in the `scripts/` directory.
 
-Both models usually take less than 10 minutes to train on a modern GPU.
+```bash
+# Train the board extractor
+./scripts/bin/train_board_extractor.sh
 
+# Train the piece classifier
+./scripts/bin/train_piece_classifier.sh
+
+# Or train the YOLO classifier
+python ./scripts/train/train_yolo_classifier.py
+```
+
+All models usually take less than 10 minutes to train on a modern GPU.
+s
 See additional launch configurations in `.vscode/launch.json` for training the models and
 running the web application.
 
