@@ -48,7 +48,7 @@ cd ChessVision-3LC
 git submodule update --init
 ```
 
-### 2A.Setup using uv (recommended)
+### 2 Install dependencies
 
 Choose either approach:
 
@@ -77,7 +77,7 @@ source .venv/bin/activate
 pip install -e ".[dev,viz,yolo]"
 ```
 
-### 4. Set up 3LC
+### 3. Set up 3LC
 
 1. Get your API key:
    - Go to [account.3lc.ai](https://accounts.3lc.ai)
@@ -86,7 +86,7 @@ pip install -e ".[dev,viz,yolo]"
 2. Login to 3LC:
 ```bash
 # Login with your API key
-3lc login
+3lc login <your-api-key>
 
 # Verify installation
 3lc --version
@@ -108,13 +108,13 @@ python -c "import torch; print('MPS available:', torch.backends.mps.is_available
 pytest tests/
 ```
 
-## Exampless
+## Examples
 
 **Note:** You must have trained models in the weights directory to run the examples. See the [Training](#training) section for more details.
 
 ### Quick Start
 s
-For a quick end-to-end overview of the system, run the Jupyter notebook:
+For a quick overview of the system, run the Jupyter notebook:
 
 ```bash
 code examples/quickstart-example.ipynb
