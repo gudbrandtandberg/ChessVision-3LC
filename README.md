@@ -34,10 +34,12 @@ which I build with my team at 3lc.ai.
 
 ## Project Structure
 
-- `chessvision/`: Contains the core computer vision code, including model definitions and training scripts.
-- `app/`: Contains the Flask web application code, including the REST API and web interface. Meant mainly for testing and development.
-- `data/`: Contains the training and evaluation datasets.
-- `weights/`: Contains the pre-trained models.
+- `chessvision/`: The core computer vision code
+- `scripts/`: Scripts for training and evaluating the models
+- `app/`: Code for a development Flask web application and compute server
+- `data/`: Training and evaluation datasets
+- `weights/`: Pre-trained models
+- `tests/`: Unit tests for the computer vision code
 
 ## Getting Started
 
@@ -46,6 +48,7 @@ which I build with my team at 3lc.ai.
 - Create a virtual environment: `python -m venv .venv`
 - Activate the virtual environment: `source .venv/bin/activate`
 - Install dependencies: `pip install -e .`
+- Set up 3LC: [3LC Quickstart](https://docs.3lc.ai/3lc/latest/quickstart/quickstart.html)
 
 ## Examples
 
@@ -95,12 +98,20 @@ In addition, there is a practically endless supply of new data collected through
 
 ## 3LC and the ML Lifecycle
 
+### Training the board extractor
+
+![ChessVision Pipeline](examples/screenshots/run_overview.png)
+
+### Training the piece classifier
+
+![ChessVision Pipeline](examples/screenshots/piece_prediction.png)
+
+### Process new raw data
+
 ![ChessVision Pipeline](examples/screenshots/embeddings.png)
 
 ![ChessVision Pipeline](examples/screenshots/new_raw_data.png)
 
-![ChessVision Pipeline](examples/screenshots/piece_prediction.png)
-
-![ChessVision Pipeline](examples/screenshots/run_overview.png)
+### Run evaluation suite
 
 ![ChessVision Pipeline](examples/screenshots/test_results.png)

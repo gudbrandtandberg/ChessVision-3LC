@@ -48,6 +48,8 @@ echo "  Sample weights: $USE_SAMPLE_WEIGHTS"
 echo "  Mixed precision: $USE_AMP"
 echo "  Deterministic: $USE_DETERMINISTIC"
 echo "  Run tests: $RUN_TESTS"
+echo "  Train table: $TRAIN_TABLE_NAME"
+echo "  Val table: $VAL_TABLE_NAME"
 
 python scripts/train/train_unet.py \
     --learning-rate "$LEARNING_RATE" \

@@ -265,7 +265,7 @@ class ChessVision:
         quadrangle = ChessVision._find_quadrangle(binary_mask)
 
         if quadrangle is None:
-            logger.warning("No valid quadrangle found in mask")
+            logger.info("Failed to extract board from image")
             return BoardExtractionResult(
                 board_image=None,
                 logits=logits,

@@ -495,4 +495,5 @@ if __name__ == "__main__":
             run=run,
             threshold=args.threshold,
             board_extractor_weights=checkpoint_path.to_str(),
+            classifier_model_id="yolo",
         )
