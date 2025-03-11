@@ -4,32 +4,26 @@ Welcome to ChessVision: a computer vision system for detecting and classifying c
 The system uses deep learning models to segment chessboards and classify chess pieces.
 
 This project is an evolution of the original [ChessVision](https://github.com/ChessVision/ChessVision),
-reimagined with the [3LC](https://3lc.ai) ecosystem in mind. It features a complete rewrite from Keras to PyTorch
-and a thorough modernization of the codebase, as well as integration with 3LC throughout the pipeline.
+reimagined with the [3LC](https://3lc.ai) integrated in all stages of the pipeline. It also features a complete rewrite in PyTorch and a thorough upgrade of the codebase.
 
 ## Motivation
 
 While detecting chess positions is certainly useful (and something I personally enjoy!),
 this project serves a broader purpose as my experimental playground for exploring
-machine learning systems end-to-end. It's where I learn, practice, and have fun
+machine learning systems. It's where I learn, practice, and have fun
 working with:
 
 - Data collection and annotation
 - Model training and evaluation
 - Performance monitoring and analysis
-- ML-powered web application development
 
-ChessVision has become my ideal testbed for tackling these challenges. While there
-might be more optimal solutions to specific problems, the real value lies in the
-patterns and abstractions I discover along the way. Recently, I've also started
-using it to develop and test features for the [3LC](https://3lc.ai) data platform,
-which I build with my team at 3lc.ai.
+The [3LC](https://3lc.ai) data platform, built by the incredible team at 3LC AI, serves as the perfect tool for data collection, data selection, labeling, and monitoring the performance of the system.
 
 ## Features
 
-- Chessboard detection and segmentation using a UNet model
-- Chess piece classification using a deep learning model
-- REST API for image processing and position analysis
+- Chessboard segmentation using a UNet model
+- Chess piece classification using either a YOLO model, or a timm-based model
+- API for image processing
 - Web interface for uploading and analyzing chess images
 
 ## Project Structure
@@ -38,17 +32,78 @@ which I build with my team at 3lc.ai.
 - `scripts/`: Scripts for training and evaluating the models
 - `app/`: Code for a development Flask web application and compute server
 - `data/`: Training and evaluation datasets
-- `weights/`: Pre-trained models
+- `weights/`: Pre-trained models (not included in the repo - train your own models or contact me for a copy)
 - `tests/`: Unit tests for the computer vision code
 
-## Getting Started
+## Installation
 
-- Checkout this repo.
-- Ensure submodules are checked out: `git submodule update --init`
-- Create a virtual environment: `python -m venv .venv`
-- Activate the virtual environment: `source .venv/bin/activate`
-- Install dependencies: `pip install -e .[yolo]`
-- Set up 3LC: [3LC Quickstart](https://docs.3lc.ai/3lc/latest/quickstart/quickstart.html)
+### 1. Clone the Repository
+
+```bash
+# Clone the repo
+git clone https://github.com/gudbrandtandberg/ChessVision-3LC.git
+cd ChessVision-3LC
+
+# Initialize and update the pytorch-unet submodule
+git submodule update --init
+```
+
+### 2. Create Virtual Environment
+
+```bash
+# Create a new virtual environment
+python -m venv .venv
+
+# Activate the environment
+# On Windows (Git Bash):
+source .venv/Scripts/activate
+# On Unix/MacOS:
+source .venv/bin/activate
+```
+
+### 3. Install Dependencies
+
+Choose either approach:
+
+#### Option A: Using uv (Recommended - Faster)
+```bash
+# Install uv
+pip install uv
+
+# Install dependencies
+uv pip install -e ".[dev,viz,yolo]"
+```
+
+#### Option B: Using pip
+```bash
+# Install in editable mode with all dependency groups
+pip install -e ".[dev,viz,yolo]"
+```
+
+### 4. Set up 3LC
+
+1. Get your API key:
+   - Go to [accounts.3lc.ai](https://accounts.3lc.ai)
+   - Copy your API key
+
+2. Login to 3LC:
+```bash
+# Login with your API key
+3lc login
+
+# Verify installation
+3lc --version
+```
+
+## Verify Installation
+
+```bash
+# Run a simple test to verify everything is working
+python -c "from chessvision import ChessVision; print('Installation successful!')"
+
+# Verify PyTorch installation
+python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+```
 
 ## Examples
 
@@ -70,7 +125,11 @@ python examples/detailed-example.py
 
 ## Training
 
-See launch configurations in `.vscode/launch.json` for training the models and
+Main scripts for training and evaluating the models are located in the `scripts/` directory.
+
+Both models usually take less than 10 minutes to train on a modern GPU.
+
+See additional launch configurations in `.vscode/launch.json` for training the models and
 running the web application.
 
 ## The ChessVision Solution
@@ -92,7 +151,7 @@ The repo comes with three original datasets checked in:
 
 - `board_extraction`: A dataset of chessboard images with annotated segmentation masks.
 - `squares`: A dataset of chess piece images with annotated classification labels.
-- `test`: A set of test images and ground truth files for evaluating the model.
+- `test`: A set of test images with ground truth files for evaluating the model.
 
 In addition, there is a practically endless supply of new data collected through a friend's chess app, which I have in a private S3 bucket.
 
