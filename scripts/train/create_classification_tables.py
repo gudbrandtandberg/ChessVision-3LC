@@ -78,8 +78,12 @@ def get_or_create_tables(
         )
 
     except FileNotFoundError:
-        logger.info("Tables not found, creating new ones...")
-        tables = create_tables()
+        if train_table_name == config.INITIAL_TABLE_NAME and val_table_name == config.INITIAL_TABLE_NAME:
+            logger.info("Initial tables not found, creating new ones...")
+            tables = create_tables()
+        else:
+            logger.warning(f"Could not find tables: {train_table_name} and {val_table_name}")
+            raise FileNotFoundError(train_table_name)
 
     return tables
 
