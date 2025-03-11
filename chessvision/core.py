@@ -97,6 +97,7 @@ class ChessVision:
             try:
                 self._classifier = utils.load_yolo_model(self._classifier_weights or constants.BEST_YOLO_CLASSIFIER)
                 self._classifier_model_id = "yolo"  # Mark as using YOLO
+                self._classifier_weights = self._classifier_weights or constants.BEST_YOLO_CLASSIFIER
                 logger.info(f"Loaded YOLO model from {self._classifier_weights or constants.BEST_YOLO_CLASSIFIER}")
             except ImportError:
                 logger.info("YOLO not available, falling back to ResNet18")
@@ -107,10 +108,12 @@ class ChessVision:
                     self.device,
                 )
                 self._classifier_model_id = "resnet18"
+                self._classifier_weights = self._classifier_weights or constants.BEST_CLASSIFIER_WEIGHTS
         # If YOLO explicitly requested, try loading it or fail
         elif self._classifier_model_id == "yolo":
             self._classifier = utils.load_yolo_model(self._classifier_weights or constants.BEST_YOLO_CLASSIFIER)
-            logger.info(f"Loaded YOLO model from {self._classifier_weights or constants.BEST_YOLO_CLASSIFIER}")
+            self._classifier_weights = self._classifier_weights or constants.BEST_YOLO_CLASSIFIER
+            logger.info(f"Loaded YOLO model from {self._classifier_weights}")
         # Otherwise load the specified model through timm
         else:
             self._classifier = utils.get_classifier_model(self._classifier_model_id)
@@ -119,6 +122,7 @@ class ChessVision:
                 self._classifier_weights or constants.BEST_CLASSIFIER_WEIGHTS,
                 self.device,
             )
+            self._classifier_weights = self._classifier_weights or constants.BEST_CLASSIFIER_WEIGHTS
 
         assert self._classifier is not None
         self._classifier.eval()
