@@ -259,7 +259,7 @@ def evaluate_model(
                     "example_id": [index],
                     "is_failed": [True],
                     "accuracy": [0.0],
-                    "square_crop": [constants.BLACK_SQUARE_PATH],
+                    "square_crop": [Image.open(constants.BLACK_SQUARE_PATH)],
                     "true_labels": [0],
                     "predicted_labels": [0],
                 }
