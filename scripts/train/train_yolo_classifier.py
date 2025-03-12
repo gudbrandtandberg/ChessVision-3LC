@@ -6,6 +6,7 @@ from typing import Any
 import tlc
 from ultralytics.utils.tlc import TLCYOLO, Settings
 
+from chessvision import constants
 from scripts.train import config
 from scripts.train.create_classification_tables import get_or_create_tables
 
@@ -60,13 +61,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=5, help="Number of epochs to train")
     parser.add_argument("--patience", type=int, default=5, help="Number of epochs to wait before stopping")
     parser.add_argument("--batch-size", type=int, default=-1, help="Batch size")
-    parser.add_argument("--run-tests", action="store_true", help="Run tests with trained model")
     parser.add_argument("--run-name", type=str, default="", help="Run name")
     parser.add_argument("--run-description", type=str, default="", help="Run description")
     parser.add_argument("--use-sample-weights", action="store_true", help="Use sampling weights")
     parser.add_argument("--train-table-name", type=str, default="", help="Train table name")
     parser.add_argument("--val-table-name", type=str, default="", help="Val table name")
     parser.add_argument("--collection-frequency", type=int, default=1, help="Collection frequency")
+    parser.add_argument("--skip-eval", action="store_true", help="Skip evaluation")
     return parser.parse_args()
 
 
@@ -90,11 +91,18 @@ if __name__ == "__main__":
         collection_frequency=args.collection_frequency,
     )
 
-    if args.run_tests:
+    classifier_checkpoint = results.save_dir / "weights" / "best.pt"
+
+    if not Path(constants.BEST_YOLO_CLASSIFIER).exists():
+        import shutil
+
+        logger.info("Copying classifier checkpoint to %s", constants.BEST_YOLO_CLASSIFIER)
+        shutil.copy(str(classifier_checkpoint), constants.BEST_YOLO_CLASSIFIER)
+
+    if not args.skip_eval:
         from scripts.eval.evaluate import evaluate_model
 
         logger.info("Running tests with trained model...")
-        classifier_checkpoint = results.save_dir / "weights" / "best.pt"
 
         evaluate_model(
             run=tlc.active_run(),
