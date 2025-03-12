@@ -20,8 +20,7 @@
                 "--compute-embeddings",
                 "--description", "",
                 "--run-name", "",
-                // "--run-tests",
-                // "--use-sample-weights",
+                "--use-sample-weights",
             ]
         },
         {
@@ -34,7 +33,6 @@
             "args": [
                 "--learning-rate", "0.000001",
                 "--amp",
-                "--run-tests",
                 "--run-description", "",
                 "--use-sample-weights",
                 "--seed", "42",

@@ -14,7 +14,7 @@ COLLECTION_FREQ=5
 # Training options
 USE_SAMPLE_WEIGHTS=true
 USE_DETERMINISTIC=true
-RUN_TESTS=true
+SKIP_EVAL=false
 
 # Project settings
 TRAIN_TABLE_NAME="initial"
@@ -34,7 +34,7 @@ source .venv/Scripts/activate
 # Build flags
 WEIGHTS_FLAG=$([ "$USE_SAMPLE_WEIGHTS" = true ] && echo "--use-sample-weights" || echo "")
 DETERMINISTIC_FLAG=$([ "$USE_DETERMINISTIC" = true ] && echo "--deterministic" || echo "")
-TEST_FLAG=$([ "$RUN_TESTS" = true ] && echo "--run-tests" || echo "")
+SKIP_EVAL_FLAG=$([ "$SKIP_EVAL" = true ] && echo "--skip-eval" || echo "")
 
 echo "Starting classifier training with:"
 echo "  Learning rate: $LEARNING_RATE"
@@ -44,7 +44,6 @@ echo "  Patience: $PATIENCE"
 echo "  Collection frequency: $COLLECTION_FREQ"
 echo "  Sample weights: $USE_SAMPLE_WEIGHTS"
 echo "  Deterministic: $USE_DETERMINISTIC"
-echo "  Run tests: $RUN_TESTS"
 echo "  Train table: $TRAIN_TABLE_NAME"
 echo "  Val table: $VAL_TABLE_NAME"
 
@@ -57,10 +56,10 @@ python -m scripts.train.train_classifier \
     --seed 42 \
     $WEIGHTS_FLAG \
     $DETERMINISTIC_FLAG \
-    $TEST_FLAG \
     --run-description "$RUN_DESCRIPTION" \
     --sweep-id "$SWEEP_ID" \
     --train-table "$TRAIN_TABLE_NAME" \
-    --val-table "$VAL_TABLE_NAME"
+    --val-table "$VAL_TABLE_NAME" \
+    $SKIP_EVAL_FLAG
 
 echo "Training completed!"

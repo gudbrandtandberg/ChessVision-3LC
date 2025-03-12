@@ -198,17 +198,22 @@ def load_yolo_model(model_weights: str) -> torch.nn.Module:
         ImportError: If ultralytics is not installed
     """
     try:
-        from ultralytics.utils.tlc import TLCYOLO
+        from ultralytics.utils.tlc import TLCYOLO as YOLO
     except ImportError:
-        logger.warning(
-            "YOLO model requires ultralytics package. Please install with 'pip install git+https://github.com/3lc-ai/ultralytics.git'.",
-        )
-        raise
+        try:
+            from ultralytics import YOLO
+
+            logger.warning("Using ultralytics (no 3lc integration) package")
+        except ImportError:
+            logger.warning(
+                "YOLO model requires ultralytics package. Please install with 'pip install git+https://github.com/3lc-ai/ultralytics.git'.",
+            )
+            raise
 
     class YOLOModelWrapper:
         """Wrapper to make YOLO model behave like a classifier."""
 
-        def __init__(self, model: TLCYOLO):
+        def __init__(self, model: YOLO):
             self.model = model
 
         def __call__(self, img: torch.Tensor) -> torch.Tensor:
@@ -228,4 +233,4 @@ def load_yolo_model(model_weights: str) -> torch.nn.Module:
             """Move the model to a specific device."""
             self.model.to(device)
 
-    return YOLOModelWrapper(TLCYOLO(model_weights))  # type: ignore[return-value]
+    return YOLOModelWrapper(YOLO(model_weights))  # type: ignore[return-value]

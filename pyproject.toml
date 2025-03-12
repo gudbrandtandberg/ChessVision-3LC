@@ -24,7 +24,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "3lc[pacmap]",
     "torch>=2.0.0",
     "torchvision>=0.15.0",
     "timm",
@@ -42,7 +41,15 @@ dependencies = [
 yolo = [
     "ultralytics",
 ]
-
+tlc = [
+    "3lc[pacmap]",
+]
+viz = [
+    "plotly>=6.0.0",
+]
+boto = [
+    "boto3>=1.37.1",
+]
 
 [dependency-groups]
 dev = [
@@ -54,9 +61,6 @@ dev = [
     "jupyter",
     "ipywidgets",
     "mypy==1.14",
-]
-viz = [
-    "plotly>=6.0.0",
 ]
 
 [tool.uv.sources]

@@ -635,7 +635,6 @@ name = "chessvision"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "3lc", extra = ["pacmap"] },
     { name = "cairosvg" },
     { name = "flask" },
     { name = "numpy" },
@@ -650,6 +649,15 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+boto = [
+    { name = "boto3" },
+]
+tlc = [
+    { name = "3lc", extra = ["pacmap"] },
+]
+viz = [
+    { name = "plotly" },
+]
 yolo = [
     { name = "ultralytics" },
 ]
@@ -664,18 +672,17 @@ dev = [
     { name = "ruff" },
     { name = "types-tqdm" },
 ]
-viz = [
-    { name = "plotly" },
-]
 
 [package.metadata]
 requires-dist = [
-    { name = "3lc", extras = ["pacmap"] },
+    { name = "3lc", extras = ["pacmap"], marker = "extra == 'tlc'" },
+    { name = "boto3", marker = "extra == 'boto'", specifier = ">=1.37.1" },
     { name = "cairosvg" },
     { name = "flask", specifier = ">=3.1.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "opencv-python" },
     { name = "pillow" },
+    { name = "plotly", marker = "extra == 'viz'", specifier = ">=6.0.0" },
     { name = "python-chess" },
     { name = "timm" },
     { name = "torch", specifier = ">=2.0.0" },
@@ -684,7 +691,7 @@ requires-dist = [
     { name = "tqdm" },
     { name = "ultralytics", marker = "extra == 'yolo'", git = "https://github.com/3lc-ai/ultralytics.git" },
 ]
-provides-extras = ["yolo"]
+provides-extras = ["yolo", "tlc", "viz", "boto"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -697,7 +704,6 @@ dev = [
     { name = "ruff" },
     { name = "types-tqdm" },
 ]
-viz = [{ name = "plotly", specifier = ">=6.0.0" }]
 
 [[package]]
 name = "click"

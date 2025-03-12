@@ -39,7 +39,6 @@ run_training() {
         --seed "$seed" \
         --deterministic \
         --amp \
-        --run-tests \
         $weights_flag \
         --run-description "$description" \
         --sweep-id "$SWEEP_ID" \
