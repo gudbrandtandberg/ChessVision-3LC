@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 import tlc
@@ -51,11 +52,11 @@ class TransformSampleToModel:
 
         # Ensure mask is single channel
         if mask.mode != "L":
-            mask = mask.convert("L")  # Convert to grayscale
+            mask = mask.convert("L")
 
         # Convert to tensors
         img_tensor = ToTensor()(img)
-        mask_tensor = ToTensor()(mask).long()
+        mask_tensor = ToTensor()(mask)
 
         return {
             "image": img_tensor,
@@ -417,11 +418,11 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
     parser.add_argument("--run-name", type=str, default=None, help="3LC run name")
     parser.add_argument("--run-description", type=str, default=None, help="3LC run description")
-    parser.add_argument("--run-tests", action="store_true", help="Run the test suite after training")
+    parser.add_argument("--skip-eval", action="store_true", help="Skip running the test suite after training")
     parser.add_argument("--use-sample-weights", action="store_true", help="Use a weighted sampler")
     parser.add_argument("--train-table", type=str, default=config.INITIAL_TABLE_NAME, help="Name of training table")
     parser.add_argument("--val-table", type=str, default=config.INITIAL_TABLE_NAME, help="Name of validation table")
-    parser.add_argument("--epochs", type=int, default=20, help="Number of epochs")
+    parser.add_argument("--epochs", type=int, default=5, help="Number of epochs")
     parser.add_argument("--batch-size", type=int, default=2, help="Batch size")
     parser.add_argument("--learning-rate", type=float, default=1e-6, help="Learning rate")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
@@ -429,7 +430,6 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--sweep-id", type=int, default=None, help="3LC sweep ID")
     parser.add_argument("--collection-frequency", type=int, default=5, help="Number of epochs between collections")
     parser.add_argument("--patience", type=int, default=5, help="Number of epochs to wait before early stopping")
-    parser.add_argument("--load", "-f", type=str, default=False, help="Load model from a .pth file")
     parser.add_argument("--scale", "-s", type=float, default=1.0, help="Downscaling factor of the images")
     parser.add_argument("--amp", action="store_true", default=False, help="Use mixed precision")
     parser.add_argument("--bilinear", action="store_true", default=False, help="Use bilinear upsampling")
@@ -457,13 +457,6 @@ if __name__ == "__main__":
     )
     model.to(device=device)
 
-    if args.load:
-        model = utils.load_model_checkpoint(
-            model,
-            constants.BEST_EXTRACTOR_WEIGHTS,
-            device,
-        )
-
     run, checkpoint_path = train_model(
         model=model,
         device=device,
@@ -486,7 +479,13 @@ if __name__ == "__main__":
         augment=args.augment,
     )
 
-    if args.run_tests:
+    if not Path(constants.BEST_EXTRACTOR_WEIGHTS).exists():
+        import shutil
+
+        logger.info("Copying extractor checkpoint to %s", constants.BEST_EXTRACTOR_WEIGHTS)
+        shutil.copy(checkpoint_path.to_str(), constants.BEST_EXTRACTOR_WEIGHTS)
+
+    if not args.skip_eval:
         from scripts.eval.evaluate import evaluate_model
 
         del model

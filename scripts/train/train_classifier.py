@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 import tlc
@@ -334,8 +335,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-name", type=str, default="")
     parser.add_argument("--run-description", type=str, default="")
-    parser.add_argument("--run-tests", action="store_true")
     parser.add_argument("--use-sample-weights", action="store_true")
+    parser.add_argument("--skip-eval", action="store_true")
     parser.add_argument("--train-table", type=str, default=config.INITIAL_TABLE_NAME)
     parser.add_argument("--val-table", type=str, default=config.INITIAL_TABLE_NAME)
     parser.add_argument("--epochs", type=int, default=10)
@@ -380,7 +381,13 @@ if __name__ == "__main__":
         val_table_name=args.val_table,
     )
 
-    if args.run_tests:
+    if not Path(constants.BEST_CLASSIFIER_WEIGHTS).exists():
+        import shutil
+
+        logger.info("Copying classifier checkpoint to %s", constants.BEST_CLASSIFIER_WEIGHTS)
+        shutil.copy(checkpoint_path.to_str(), constants.BEST_CLASSIFIER_WEIGHTS)
+
+    if not args.skip_eval:
         from scripts.eval.evaluate import evaluate_model
 
         del model
