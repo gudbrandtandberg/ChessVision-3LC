@@ -63,7 +63,6 @@ viz = [
 ultralytics = { git = "https://github.com/3lc-ai/ultralytics.git" }
 
 [tool.ruff]
-# Same as Black.
 line-length = 120
 target-version = "py39"
 
@@ -133,9 +132,6 @@ extend-immutable-calls = ["torch.nn.Parameter", "Parameter", "torch.tensor", "to
 max-args = 6  # Default is 5, slightly relax this
 max-branches = 12  # Default is 12
 
-[tool.black]
-line-length = 120
-target-version = ["py39"]
 
 [tool.mypy]
 python_version = "3.9"
@@ -158,16 +154,11 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["cv2.*", "timm.*", "torch.*", "torchvision.*", "boto3.*", "plotly.*", "ultralytics.*"]
+module = ["cv2.*", "timm.*", "torch.*", "torchvision.*", "boto3.*", "plotly.*", "ultralytics.*", "cairosvg.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["tlc.*"]
-ignore_missing_imports = true
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = ["cairosvg.*"]
 ignore_missing_imports = true
 ignore_errors = true
 

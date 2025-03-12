@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def train_model(
     model: TLCYOLO,
-    epochs: int = 10,
+    epochs: int = 5,
     batch_size: int = -1,
     run_name: str = "",
     run_description: str = "",
@@ -22,6 +22,7 @@ def train_model(
     patience: int = 5,
     train_table_name: str = "",
     val_table_name: str = "",
+    collection_frequency: int = 1,
 ) -> Any:
     settings = Settings(
         project_name=config.YOLO_CLASSIFICATION_PROJECT,
@@ -32,6 +33,8 @@ def train_model(
         sampling_weights=use_sample_weights,
         exclude_zero_weight_training=True,
         exclude_zero_weight_collection=False,
+        collection_epoch_start=1,
+        collection_epoch_interval=collection_frequency,
     )
 
     tables = get_or_create_tables(
@@ -54,7 +57,7 @@ def train_model(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default="yolov8m-cls.pt", help="YOLO model ID")
-    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs to train")
+    parser.add_argument("--epochs", type=int, default=5, help="Number of epochs to train")
     parser.add_argument("--patience", type=int, default=5, help="Number of epochs to wait before stopping")
     parser.add_argument("--batch-size", type=int, default=-1, help="Batch size")
     parser.add_argument("--run-tests", action="store_true", help="Run tests with trained model")
@@ -63,6 +66,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use-sample-weights", action="store_true", help="Use sampling weights")
     parser.add_argument("--train-table-name", type=str, default="", help="Train table name")
     parser.add_argument("--val-table-name", type=str, default="", help="Val table name")
+    parser.add_argument("--collection-frequency", type=int, default=1, help="Collection frequency")
     return parser.parse_args()
 
 
@@ -83,6 +87,7 @@ if __name__ == "__main__":
         patience=args.patience,
         train_table_name=args.train_table_name,
         val_table_name=args.val_table_name,
+        collection_frequency=args.collection_frequency,
     )
 
     if args.run_tests:
