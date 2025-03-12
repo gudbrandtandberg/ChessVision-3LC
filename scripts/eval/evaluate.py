@@ -169,17 +169,48 @@ def save_svg(chessboard: chess.Board, path: Path) -> None:
     cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=str(path))
 
 
+def resolve_table(table_name: str, image_folder: Path, project_name: str, dataset_name: str = "test") -> tlc.Table:
+    """Resolve table by first trying to load existing, then creating if needed.
+
+    Args:
+        table_name: Name of the table to resolve
+        image_folder: Path to folder containing images
+        project_name: Name of the project
+        dataset_name: Name of the dataset
+
+    Returns:
+        Resolved tlc.Table instance
+    """
+    try:
+        return tlc.Table.from_names(
+            table_name=table_name,
+            dataset_name=dataset_name,
+            project_name=project_name,
+        )
+    except FileNotFoundError:
+        return tlc.Table.from_image_folder(
+            image_folder,
+            include_label_column=False,
+            dataset_name=dataset_name,
+            table_name=table_name,
+            project_name=project_name,
+            add_weight_column=False,
+            if_exists="reuse",
+        )
+
+
 def evaluate_model(
     image_folder: Path = TEST_DATA_DIR / "raw",
     truth_folder: Path = TEST_DATA_DIR / "ground_truth",
     run: tlc.Run | None = None,
     threshold: float = 0.5,
     project_name: str = "chessvision-testing",
+    table_name: str = "initial",
     run_name: str = "",
     run_description: str = "",
     board_extractor_weights: str | None = None,
     classifier_weights: str | None = None,
-    classifier_model_id: str = "resnet18",
+    classifier_model_id: str = "",
 ) -> tlc.Run:
     """Run evaluation on test images using the ChessVision model.
 
@@ -214,11 +245,14 @@ def evaluate_model(
         lazy_load=False,
     )
 
+    # Get or create tlc.Table using the helper function
+    test_table = resolve_table(table_name=table_name, image_folder=image_folder, project_name=project_name)
+
     # Set up metrics writer
     metrics_writer = tlc.MetricsTableWriter(
-        run.url,
+        run_url=run.url,
+        foreign_table_url=test_table.url,
         column_schemas={
-            "raw_img": tlc.Schema(value=tlc.ImageUrlStringValue("raw_img")),
             "true_labels": tlc.CategoricalLabel("true_labels", constants.LABEL_NAMES),
             "predicted_labels": tlc.CategoricalLabel("predicted_labels", constants.LABEL_NAMES),
             "rendered_board": tlc.Schema(value=tlc.ImageUrlStringValue("rendered_board")),
@@ -252,7 +286,6 @@ def evaluate_model(
                 logger.warning(f"Failed to extract board from {filename}")
 
                 metrics_batch = {
-                    "raw_img": [str(image_folder / filename)],
                     "predicted_masks": [str(predicted_mask_url)],
                     "extracted_board": [str(constants.BLACK_BOARD_PATH)],
                     "rendered_board": [""],
@@ -298,7 +331,6 @@ def evaluate_model(
             save_svg(board, svg_url)
 
             metrics_batch = {
-                "raw_img": [str(image_folder / filename)] * 64,
                 "predicted_masks": [str(predicted_mask_url)] * 64,
                 "extracted_board": [str(extracted_board_url)] * 64,
                 "rendered_board": [str(svg_url)] * 64,
@@ -350,8 +382,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-description", type=str, default="")
     parser.add_argument("--board-extractor-weights", type=str, help="Path to board extractor weights")
     parser.add_argument("--classifier-weights", type=str, help="Path to classifier weights")
-    parser.add_argument("--classifier-model-id", type=str, default="resnet18", help="Classifier model ID")
-
+    parser.add_argument("--classifier-model-id", type=str, default="yolo", help="Classifier model ID")
+    parser.add_argument("--table-name", type=str, default="initial", help="Table name")
     return parser.parse_args()
 
 
