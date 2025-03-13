@@ -135,8 +135,7 @@ def compute_position_metrics(
     Returns:
         PositionMetrics containing accuracy and label information
     """
-    # Get true labels from FEN
-    true_board = chess.Board(true_fen + " w KQkq - 0 1")  # Add dummy values for full FEN
+    true_board = chess.Board(true_fen + " w KQkq - 0 1")
     true_labels = board_to_labels(true_board)
     true_labels_indices = [constants.LABEL_INDICES[label] for label in true_labels]
 
@@ -306,7 +305,6 @@ def evaluate_model(
 
             if result.position is None:
                 extraction_failures += 1
-                logger.warning(f"Failed to extract board from {filename}")
 
                 metrics_batch = {
                     "predicted_masks": [str(predicted_mask_url)],
@@ -435,3 +433,6 @@ if __name__ == "__main__":
         logger.info("Test accuracy: {}".format(run.constants["parameters"]["test_results"]["top_1_accuracy"]))
         logger.info("Top-2 accuracy: {}".format(run.constants["parameters"]["test_results"]["top_2_accuracy"]))
         logger.info("Top-3 accuracy: {}".format(run.constants["parameters"]["test_results"]["top_3_accuracy"]))
+        logger.info(
+            "Extraction failures: {}".format(run.constants["parameters"]["test_results"]["extraction_failures"]),
+        )
