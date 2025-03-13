@@ -117,7 +117,7 @@ pytest tests/
 **Note:** You must have trained models in the weights directory to run the examples. See the [Training](#training) section for more details.
 
 ### Quick Start
-s
+
 For a quick overview of the system, run the Jupyter notebook:
 
 ```bash
