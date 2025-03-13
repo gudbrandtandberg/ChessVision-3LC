@@ -156,12 +156,16 @@ def compute_position_metrics(
     )
 
 
-def get_test_generator(image_dir: Path) -> Generator[tuple[str, np.ndarray], None, None]:
-    img_filenames = utils.listdir_nohidden(str(image_dir))
-    test_imgs = np.array([cv2.imread(str(image_dir / x)) for x in img_filenames])
-
-    for i in range(len(test_imgs)):
-        yield img_filenames[i], test_imgs[i]
+def get_test_generator(test_table: tlc.Table) -> Generator[tuple[np.ndarray, str, str], None, None]:
+    """Returns (img, filename, true_fen)"""
+    for img in test_table:
+        img_url: str = img._tlc_url
+        img_array = cv2.imread(img_url)
+        filename = img_url.split("/")[-1]
+        fen_path = img_url.lower().replace("raw", "ground_truth").replace("jpg", "txt")
+        with Path(fen_path).open("r") as f:
+            true_fen = f.read().strip()
+        yield img_array, filename, true_fen
 
 
 def save_svg(chessboard: chess.Board, path: Path) -> None:
@@ -170,18 +174,19 @@ def save_svg(chessboard: chess.Board, path: Path) -> None:
 
 
 def resolve_table(
+    *,
     table_name: str,
-    image_folder: Path,
     project_name: str = "chessvision-testing",
     dataset_name: str = "test",
+    image_folder: Path | None = None,
 ) -> tlc.Table:
     """Resolve table by first trying to load existing, then creating if needed.
 
     Args:
         table_name: Name of the table to resolve
-        image_folder: Path to folder containing images
         project_name: Name of the project
         dataset_name: Name of the dataset
+        image_folder: Path to folder containing images
 
     Returns:
         Resolved tlc.Table instance
@@ -193,7 +198,9 @@ def resolve_table(
             project_name=project_name,
         )
         logger.info(f"Resolved existing table: {table_name} ({len(table)} images)")
-    except FileNotFoundError:
+    except FileNotFoundError as err:
+        if image_folder is None:
+            raise ValueError("image_folder is required if table does not exist") from err  # noqa: TRY003
         table = tlc.Table.from_image_folder(
             image_folder,
             include_label_column=False,
@@ -209,8 +216,8 @@ def resolve_table(
 
 
 def evaluate_model(
-    image_folder: Path = TEST_DATA_DIR / "initial" / "raw",
-    truth_folder: Path = TEST_DATA_DIR / "initial" / "ground_truth",
+    *,
+    image_folder: Path | None = None,
     run: tlc.Run | None = None,
     threshold: float = 0.5,
     project_name: str = "chessvision-testing",
@@ -229,7 +236,6 @@ def evaluate_model(
 
     Args:
         image_folder: Directory containing test images
-        truth_folder: Directory containing ground truth labels as FEN strings
         run: Optional 3LC run to log results to
         threshold: Confidence threshold for board extraction
         project_name: Name of the 3LC project
@@ -274,18 +280,22 @@ def evaluate_model(
         },
     )
 
-    data_generator = get_test_generator(image_folder)
+    data_generator = get_test_generator(test_table)
 
     top_1_accuracy = 0.0
     top_2_accuracy = 0.0
     top_3_accuracy = 0.0
 
     times = []
-    test_set_size = len(utils.listdir_nohidden(str(image_folder)))
+    test_set_size = len(test_table)
     extraction_failures = 0
 
     with tlc.bulk_data_url_context(run.bulk_data_url, metrics_writer.url):
-        for index, (filename, img) in tqdm(enumerate(data_generator), total=test_set_size, desc="Evaluating images"):
+        for index, (img, filename, true_fen) in tqdm(
+            enumerate(data_generator),
+            total=test_set_size,
+            desc="Evaluating images",
+        ):
             result = cv.process_image(img)
             times.append(result.processing_time)
 
@@ -320,10 +330,11 @@ def evaluate_model(
             extracted_board_url.parent.mkdir(parents=True, exist_ok=True)
             Image.fromarray(result.board_extraction.board_image).save(extracted_board_url)
 
-            # Load the true labels from FEN
-            truth_file = truth_folder / (filename[:-4] + ".txt")
-            with truth_file.open("r") as truth:
-                true_fen = truth.read().strip()
+            # Save the rendered board image
+            board = chess.Board(result.position.fen)
+            svg_url = Path((run.bulk_data_url / "rendered_board" / (filename[:-4] + ".png")).to_str())
+            svg_url.parent.mkdir(parents=True, exist_ok=True)
+            save_svg(board, svg_url)
 
             # Compute the accuracy
             predictions = result.position.predictions
@@ -336,12 +347,6 @@ def evaluate_model(
             top_1_accuracy += top_1
             top_2_accuracy += top_2
             top_3_accuracy += top_3
-
-            # Write and register a rendered board image
-            board = chess.Board(result.position.fen)
-            svg_url = Path((run.bulk_data_url / "rendered_board" / (filename[:-4] + ".png")).to_str())
-            svg_url.parent.mkdir(parents=True, exist_ok=True)
-            save_svg(board, svg_url)
 
             metrics_batch = {
                 "predicted_masks": [str(predicted_mask_url)] * 64,
@@ -369,6 +374,7 @@ def evaluate_model(
         "extraction_failures": extraction_failures,
         "board_extractor_weights": cv._board_extractor_weights,
         "classifier_weights": cv._classifier_weights,
+        "test_table_name": table_name,
     }
 
     run.set_parameters(
@@ -388,7 +394,6 @@ def evaluate_model(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate ChessVision model on test dataset")
     parser.add_argument("--image-folder", type=str, default=str(TEST_DATA_DIR / "initial" / "raw"))
-    parser.add_argument("--truth-folder", type=str, default=str(TEST_DATA_DIR / "initial" / "ground_truth"))
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--project-name", type=str, default="chessvision-testing")
     parser.add_argument("--run-name", type=str, default="")
@@ -401,7 +406,12 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(handler)
+    logger.propagate = False
 
     logger.info("Running ChessVision evaluation...")
     args = parse_args()
@@ -409,7 +419,7 @@ if __name__ == "__main__":
 
     run = evaluate_model(
         image_folder=Path(args.image_folder),
-        truth_folder=Path(args.truth_folder),
+        run=None,
         project_name=args.project_name,
         run_name=args.run_name,
         run_description=args.run_description,
@@ -417,6 +427,7 @@ if __name__ == "__main__":
         board_extractor_weights=args.board_extractor_weights,
         classifier_weights=args.classifier_weights,
         classifier_model_id=args.classifier_model_id,
+        table_name=args.table_name,
     )
     stop = time.time()
     logger.info(f"Evaluation completed in {stop - start:.1f}s")
