@@ -486,7 +486,7 @@ if __name__ == "__main__":
         shutil.copy(checkpoint_path.to_str(), constants.BEST_EXTRACTOR_WEIGHTS)
 
     if not args.skip_eval:
-        from scripts.eval.evaluate import evaluate_model
+        from scripts.eval import evaluate_model
 
         del model
 

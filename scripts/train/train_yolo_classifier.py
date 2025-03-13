@@ -100,7 +100,7 @@ if __name__ == "__main__":
         shutil.copy(str(classifier_checkpoint), constants.BEST_YOLO_CLASSIFIER)
 
     if not args.skip_eval:
-        from scripts.eval.evaluate import evaluate_model
+        from scripts.eval import evaluate_model
 
         logger.info("Running tests with trained model...")
 
