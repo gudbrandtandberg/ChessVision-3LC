@@ -134,20 +134,20 @@ Main scripts for training and evaluating the models are located in the `scripts/
 
 ```bash
 # Train the board extractor
-./scripts/bin/train_board_extractor.sh --skip-eval
+./scripts/bin/train_board_extractor.sh
 
-# Train the piece classifier
-./scripts/bin/train_piece_classifier.sh --skip-eval
+# Train the YOLO classifier (recommended, requires "yolo" extra)
+./scripts/bin/train_yolo_classifier.sh
 
-# Or train the YOLO classifier (recommended, requires "yolo" extra)
-python ./scripts/train/train_yolo_classifier.py --skip-eval
+# Or train the default piece classifier
+./scripts/bin/train_piece_classifier.sh
 
 # Now that we have trained models, we can run the evaluation suite
 ./scripts/bin/evaluate.sh
 ```
 
 All models usually take less than 10 minutes to train on a modern GPU.
-s
+
 See additional launch configurations in `.vscode/launch.json` for training the models and
 running the web application.
 
