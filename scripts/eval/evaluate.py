@@ -403,16 +403,23 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-if __name__ == "__main__":
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
+def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(handler)
     logger.propagate = False
+    return logger
+
+
+if __name__ == "__main__":
+    logger = setup_logger(__name__)
 
     logger.info("Running ChessVision evaluation...")
     args = parse_args()
+    logger.info(f"Arguments: {args}")
+
     start = time.time()
 
     run = evaluate_model(

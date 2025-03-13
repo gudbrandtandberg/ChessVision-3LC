@@ -23,6 +23,7 @@ from scripts.train import config
 from scripts.train.create_board_extraction_tables import get_or_create_tables
 from scripts.train.training_utils import set_deterministic_mode, worker_init_fn
 from scripts.train.unet_loss_collector import LossCollector
+from scripts.utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -109,28 +110,28 @@ class PrepareModelOutputsForLogging:
 
 def train_model(
     model: torch.nn.Module,
-    device: torch.device,
-    epochs: int = 5,
-    batch_size: int = 1,
-    learning_rate: float = 1e-5,
-    save_checkpoint: bool = True,
-    amp: bool = False,
     weight_decay: float = 1e-8,
     momentum: float = 0.999,
     gradient_clipping: float = 1.0,
-    run_name: str | None = None,
-    run_description: str | None = None,
-    use_sample_weights: bool = False,
     validations_per_epoch: int = 2,
-    collection_frequency: int = 5,
-    patience: int = 5,
-    threshold: float = 0.5,
-    seed: int = 42,
-    deterministic: bool = False,
-    sweep_id: int | None = None,
-    train_table_name: str = config.INITIAL_TABLE_NAME,
-    val_table_name: str = config.INITIAL_TABLE_NAME,
-    augment: bool = False,
+    *,
+    device: torch.device,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    amp: bool,
+    run_name: str,
+    run_description: str,
+    use_sample_weights: bool,
+    collection_frequency: int,
+    patience: int,
+    threshold: float,
+    seed: int,
+    deterministic: bool,
+    sweep_id: int | None,
+    train_table_name: str,
+    val_table_name: str,
+    augment: bool,
 ) -> tuple[tlc.Run, tlc.Url]:
     if deterministic:
         seed_worker = worker_init_fn
@@ -225,7 +226,6 @@ def train_model(
         Learning rate:    {learning_rate}
         Training size:    {n_train}
         Validation size:  {n_val}
-        Checkpoints:      {save_checkpoint}
         Device:           {device.type}
         Mixed Precision:  {amp}
         Sampling weights: {use_sample_weights}
@@ -336,7 +336,7 @@ def train_model(
                         },
                     )
 
-        if save_checkpoint and val_score > best_val_score:
+        if val_score > best_val_score:
             best_val_score = val_score
             patience_counter = 0
             save_extractor_checkpoint(
@@ -442,7 +442,10 @@ def get_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = get_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logger = setup_logger(__name__)
+
+    logger.info("Running ChessVision training...")
+    logger.info(f"Arguments: {args}")
 
     if args.deterministic:
         set_deterministic_mode(args.seed)

@@ -9,21 +9,23 @@ from ultralytics.utils.tlc import TLCYOLO, Settings
 from chessvision import constants
 from scripts.train import config
 from scripts.train.create_classification_tables import get_or_create_tables
+from scripts.utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
 
 def train_model(
     model: TLCYOLO,
-    epochs: int = 5,
-    batch_size: int = -1,
-    run_name: str = "",
-    run_description: str = "",
-    use_sample_weights: bool = True,
-    patience: int = 5,
-    train_table_name: str = "",
-    val_table_name: str = "",
-    collection_frequency: int = 1,
+    *,
+    epochs: int,
+    batch_size: int,
+    run_name: str,
+    run_description: str,
+    use_sample_weights: bool,
+    patience: int,
+    train_table_name: str,
+    val_table_name: str,
+    collection_frequency: int,
 ) -> Any:
     settings = Settings(
         project_name=config.YOLO_CLASSIFICATION_PROJECT,
@@ -72,9 +74,12 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.WARNING, format="%(message)s")
-
     args = parse_args()
+
+    logger = setup_logger(__name__)
+
+    logger.info("Running ChessVision training...")
+    logger.info(f"Arguments: {args}")
 
     model = TLCYOLO(args.model)
 

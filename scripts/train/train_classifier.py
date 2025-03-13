@@ -20,6 +20,7 @@ from chessvision import constants, utils
 from scripts.train import config
 from scripts.train.create_classification_tables import get_or_create_tables
 from scripts.train.training_utils import EarlyStopping, set_deterministic_mode, worker_init_fn
+from scripts.utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -354,7 +355,10 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
 
-    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    logger = setup_logger(__name__)
+
+    logger.info("Running ChessVision training...")
+    logger.info(f"Arguments: {args}")
 
     if args.deterministic:
         set_deterministic_mode(args.seed)
