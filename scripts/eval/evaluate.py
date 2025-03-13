@@ -169,7 +169,12 @@ def save_svg(chessboard: chess.Board, path: Path) -> None:
     cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=str(path))
 
 
-def resolve_table(table_name: str, image_folder: Path, project_name: str, dataset_name: str = "test") -> tlc.Table:
+def resolve_table(
+    table_name: str,
+    image_folder: Path,
+    project_name: str = "chessvision-testing",
+    dataset_name: str = "test",
+) -> tlc.Table:
     """Resolve table by first trying to load existing, then creating if needed.
 
     Args:
@@ -182,26 +187,30 @@ def resolve_table(table_name: str, image_folder: Path, project_name: str, datase
         Resolved tlc.Table instance
     """
     try:
-        return tlc.Table.from_names(
+        table = tlc.Table.from_names(
             table_name=table_name,
             dataset_name=dataset_name,
             project_name=project_name,
         )
+        logger.info(f"Resolved existing table: {table_name} ({len(table)} images)")
     except FileNotFoundError:
-        return tlc.Table.from_image_folder(
+        table = tlc.Table.from_image_folder(
             image_folder,
             include_label_column=False,
+            extensions=(".JPG", ".jpg"),
             dataset_name=dataset_name,
             table_name=table_name,
             project_name=project_name,
             add_weight_column=False,
             if_exists="reuse",
         )
+        logger.info(f"Created new table: {table.name} ({len(table)} images)")
+    return table
 
 
 def evaluate_model(
-    image_folder: Path = TEST_DATA_DIR / "raw",
-    truth_folder: Path = TEST_DATA_DIR / "ground_truth",
+    image_folder: Path = TEST_DATA_DIR / "initial" / "raw",
+    truth_folder: Path = TEST_DATA_DIR / "initial" / "ground_truth",
     run: tlc.Run | None = None,
     threshold: float = 0.5,
     project_name: str = "chessvision-testing",
@@ -230,6 +239,13 @@ def evaluate_model(
     Returns:
         The 3LC run containing evaluation results
     """
+    # Get or create tlc.Table using the helper function
+    test_table = resolve_table(
+        table_name=table_name,
+        image_folder=image_folder,
+        project_name=project_name,
+    )
+
     if not run:
         run = tlc.init(
             project_name=project_name,
@@ -244,9 +260,6 @@ def evaluate_model(
         classifier_model_id=classifier_model_id,
         lazy_load=False,
     )
-
-    # Get or create tlc.Table using the helper function
-    test_table = resolve_table(table_name=table_name, image_folder=image_folder, project_name=project_name)
 
     # Set up metrics writer
     metrics_writer = tlc.MetricsTableWriter(
@@ -374,8 +387,8 @@ def evaluate_model(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate ChessVision model on test dataset")
-    parser.add_argument("--image-folder", type=str, default=str(TEST_DATA_DIR / "raw"))
-    parser.add_argument("--truth-folder", type=str, default=str(TEST_DATA_DIR / "ground_truth"))
+    parser.add_argument("--image-folder", type=str, default=str(TEST_DATA_DIR / "initial" / "raw"))
+    parser.add_argument("--truth-folder", type=str, default=str(TEST_DATA_DIR / "initial" / "ground_truth"))
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--project-name", type=str, default="chessvision-testing")
     parser.add_argument("--run-name", type=str, default="")
