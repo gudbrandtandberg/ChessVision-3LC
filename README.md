@@ -3,6 +3,10 @@
 Welcome to ChessVision: a computer vision system for detecting and classifying chess positions from images of 2D chessboards.
 The system uses deep learning models to segment chessboards and classify chess pieces.
 
+|  |  |
+|---|---|
+| ![Board Detection](examples/screenshots/masks.png) | ![Square Classification](examples/screenshots/squares.png) |
+
 This project is an evolution of the original [ChessVision](https://github.com/gudbrandtandberg/ChessVision),
 reimagined with the [3LC](https://3lc.ai) integrated in all stages of the pipeline. It also features a complete rewrite in PyTorch and a thorough upgrade of the codebase.
 
