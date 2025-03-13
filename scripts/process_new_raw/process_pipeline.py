@@ -238,6 +238,7 @@ def enrich_tlc_table(
         prob_distribution_scores = []
         extracted_boards = []
         masks = []
+        fens = []
 
         for i in range(batch_size):
             # Get original image
@@ -275,11 +276,13 @@ def enrich_tlc_table(
                 # Add successful extraction results
                 rendered_boards.append(board_image)
                 extracted_boards.append(Image.fromarray(board_result.board_image))
+                fens.append(position_result.fen)
 
             else:
                 # Add default images for failed extraction
                 rendered_boards.append(black_image_gray)
                 extracted_boards.append(black_image_gray)
+                fens.append("")
 
             # Collect all metrics
             quad_score = quadrangle_regularity(board_result.quadrangle)
@@ -305,6 +308,7 @@ def enrich_tlc_table(
             "quad_score": quadrangle_scores,
             "completeness": mask_completeness_scores,
             "distribution": prob_distribution_scores,
+            "FEN": fens,
         }
 
     # Define collector schemas
