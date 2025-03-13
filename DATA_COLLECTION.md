@@ -15,6 +15,7 @@
 ## Test Set Guidelines
 
 ### DO:
+
 - Define clear challenge categories (e.g., lighting conditions, angles, board states)
 - Sample systematically across categories
 - Include both challenging and typical cases
@@ -22,6 +23,7 @@
 - Verify distribution matches real-world scenarios
 
 ### DON'T:
+
 - Select samples based on current model failures
 - Create artificially difficult test sets
 - Mix test and training data sources
@@ -30,12 +32,14 @@
 ## Training Set Guidelines
 
 ### DO:
+
 - Use validation performance to identify weak categories
 - Collect broadly within identified categories
 - Maintain class balance
 - Include both challenging and typical cases
 
 ### DON'T:
+
 - Cherry-pick individual failure cases
 - Ignore "easy" cases
 - Use test set performance to guide specific sample selection
