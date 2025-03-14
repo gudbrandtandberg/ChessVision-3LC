@@ -155,6 +155,14 @@ All models usually take less than 10 minutes to train on a modern GPU.
 See additional launch configurations in `.vscode/launch.json` for training the models and
 running the web application.
 
+### Extra: a more challenging test set
+
+The `scripts/merge_new_raw/merge_new_test.py` script merges a new batch of raw data into the test set. In order to run it, the initial test table must have been created, e.g. by running the evaluation suite once. Uncomment the `table_name` argument in `evaluate.sh` to run the evaluation suite against the latest test set.
+
+```bash
+python scripts/merge_new_raw/merge_new_test.py
+```
+
 ## The ChessVision Solution
 
 The chessvision solution consists of several steps:

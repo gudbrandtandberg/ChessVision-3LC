@@ -12,4 +12,4 @@ python scripts/eval/evaluate.py \
     --board-extractor-weights "" \
     --classifier-weights "" \
     --classifier-model-id "yolo" \
-    --table-name "merged-2024-11-04-2024-11-04"
+#    --table-name "merged-2024-11-04-2024-11-04"
