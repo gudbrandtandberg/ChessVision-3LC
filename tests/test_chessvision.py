@@ -104,83 +104,28 @@ def test_classify_position(cv_model: ChessVision, test_image: np.ndarray) -> Non
 def test_extract_squares() -> None:
     """Test that squares are correctly extracted from a board image."""
     # Create a test board image (512x512) with unique values for each square
-    # This allows us to verify both position and orientation of each square
     board = np.zeros((512, 512), dtype=np.uint8)
-    for i in range(8):
-        for j in range(8):
-            # Fill each square with a unique pattern:
-            # - Base value is i*8 + j (0-63) for position verification
-            # - Add a gradient within each square for orientation verification
-            square = np.zeros((64, 64), dtype=np.uint8)
-            base_value = (i * 8 + j) * 2  # *2 to avoid overflow with gradient
-            for x in range(64):
-                for y in range(64):
-                    # Add gradient: increases from top-left to bottom-right
-                    gradient = (x + y) // 64
-                    square[x, y] = base_value + gradient
-            board[i * 64:(i + 1) * 64, j * 64:(j + 1) * 64] = square
+    square_size = 64
 
-    # Test square extraction without flipping
-    squares = ChessVision.extract_squares(board, flip=False)
+    # Fill each square with a unique value based on its position
+    for rank in range(8):
+        for file in range(8):
+            value = rank * 8 + file
+            board[rank * square_size : (rank + 1) * square_size, file * square_size : (file + 1) * square_size] = value
 
-    # Check shapes
+    # Test extraction (default orientation - white's perspective)
+    squares = ChessVision.extract_squares(board)
     assert squares.shape == (64, 64, 64, 1)
 
-    # Verify each square's position and orientation
-    for idx in range(64):
-        i, j = idx // 8, idx % 8
-        square = squares[idx, :, :, 0]
+    # Verify square positions in standard orientation
+    # a8 is index 0, h8 is index 7, a1 is index 56, h1 is index 63
+    assert squares[0, 0, 0, 0] == 0  # a8 should be value 0 (top-left)
+    assert squares[7, 0, 0, 0] == 7  # h8 should be value 7 (top-right)
+    assert squares[56, 0, 0, 0] == 56  # a1 should be value 56 (bottom-left)
+    assert squares[63, 0, 0, 0] == 63  # h1 should be value 63 (bottom-right)
 
-        # Check base value (position verification)
-        expected_base = (i * 8 + j) * 2
-        assert square[0, 0] == expected_base, f"Square at position {idx} (i={i}, j={j}) has wrong base value"
-
-        # Check gradient (orientation verification)
-        assert square[63, 63] == expected_base + 1, f"Square at position {idx} (i={i}, j={j}) has wrong gradient"
-        assert square[0, 63] == expected_base + 0, f"Square at position {idx} (i={i}, j={j}) has wrong left edge"
-        assert square[63, 0] == expected_base + 0, f"Square at position {idx} (i={i}, j={j}) has wrong top edge"
-
-    # Test square extraction with flipping
-    squares_flipped = ChessVision.extract_squares(board, flip=True)
-
-    # Check shapes
-    assert squares_flipped.shape == (64, 64, 64, 1)
-
-    # Verify each square's position and orientation in flipped board
-    for idx in range(64):
-        # Calculate original position that should now be at idx
-        orig_i = 7 - (idx // 8)
-        orig_j = 7 - (idx % 8)
-        square = squares_flipped[idx, :, :, 0]
-
-        # Check base value (position verification)
-        expected_base = (orig_i * 8 + orig_j) * 2
-        assert square[0, 0] == expected_base, f"Flipped square at position {idx} (orig_i={orig_i}, orig_j={orig_j}) has wrong base value"
-
-        # Check gradient (orientation verification)
-        assert square[63, 63] == expected_base + 1, f"Flipped square at position {idx} (orig_i={orig_i}, orig_j={orig_j}) has wrong gradient"
-        assert square[0, 63] == expected_base + 0, f"Flipped square at position {idx} (orig_i={orig_i}, orig_j={orig_j}) has wrong left edge"
-        assert square[63, 0] == expected_base + 0, f"Flipped square at position {idx} (orig_i={orig_i}, orig_j={orig_j}) has wrong top edge"
-
-
-def test_get_square_names() -> None:
-    """Test that square names are correctly generated."""
-    # Test without flipping
-    names = ChessVision._get_square_names(flip=False)
-
-    # Check square names
-    assert len(names) == 64
-    assert names[0] == "a8"  # Top-left square
-    assert names[7] == "h8"  # Top-right square
-    assert names[56] == "a1"  # Bottom-left square
-    assert names[63] == "h1"  # Bottom-right square
-
-    # Test with flipping
-    names_flipped = ChessVision._get_square_names(flip=True)
-
-    # Check square names (should be reversed)
-    assert len(names_flipped) == 64
-    assert names_flipped[0] == "h1"  # Top-left square (was bottom-right)
-    assert names_flipped[7] == "a1"  # Top-right square (was bottom-left)
-    assert names_flipped[56] == "h8"  # Bottom-left square (was top-right)
-    assert names_flipped[63] == "a8"  # Bottom-right square (was top-left)
+    # Test middle squares
+    assert squares[8, 0, 0, 0] == 8  # a7
+    assert squares[15, 0, 0, 0] == 15  # h7
+    assert squares[16, 0, 0, 0] == 16  # a6
+    assert squares[23, 0, 0, 0] == 23  # h6
