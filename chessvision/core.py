@@ -215,8 +215,9 @@ class ChessVision:
         Returns:
             PositionResult containing classification results
         """
-        # Extract individual squares
-        squares, square_names = self._extract_squares(board_image, flip)
+        # Extract individual squares and get square names
+        squares = self.extract_squares(board_image, flip)
+        square_names = self._get_square_names(flip)
 
         # Prepare batch for model
         batch = torch.Tensor(squares).permute(0, 3, 1, 2).to(self.device)
@@ -324,7 +325,7 @@ class ChessVision:
         pred_labels = [constants.LABEL_NAMES[p] for p in initial_predictions]
 
         # Apply chess logic to fix potential errors
-        pred_labels = ChessVision._validate_position(pred_labels, probabilities, square_names)
+        pred_labels = ChessVision.validate_position(pred_labels, probabilities, square_names)
 
         # Create chess board from labels
         board = chess.BaseBoard(board_fen=None)
@@ -404,20 +405,14 @@ class ChessVision:
         return np.array(approx * sf, dtype=np.float32)
 
     @staticmethod
-    def _extract_squares(
-        board: NDArray[np.uint8],
-        flip: bool = False,
-    ) -> tuple[NDArray[np.uint8], list[str]]:
-        """Extract individual squares from board image.
+    def _get_square_names(flip: bool = False) -> list[str]:
+        """Get the list of square names in standard chess notation.
 
         Args:
-            board: A 512x512 image of a chessboard
             flip: Whether to flip the board orientation
 
         Returns:
-            Tuple containing:
-                - Array of square images (64, 64, 64, 1)
-                - List of square names (e.g. ['a8', 'b8', ...])
+            List of square names (e.g. ['a8', 'b8', ...])
         """
         ranks = ["a", "b", "c", "d", "e", "f", "g", "h"]
         files = ["1", "2", "3", "4", "5", "6", "7", "8"]
@@ -426,32 +421,52 @@ class ChessVision:
             ranks = list(reversed(ranks))
             files = list(reversed(files))
 
-        squares_list = []
         names = []
-
-        # Calculate square size
-        ww, hh = board.shape
-        w = int(ww / 8)
-        h = int(hh / 8)
-
-        # Extract each square
         for i in range(8):
             for j in range(8):
-                square = board[i * w : (i + 1) * w, j * h : (j + 1) * h]
-                squares_list.append(square)
                 names.append(ranks[j] + files[7 - i])
 
-        # Reshape squares to (N, 64, 64, 1)
-        squares = np.array(squares_list)
-        squares = squares.reshape(squares.shape[0], 64, 64, 1)
-
-        return squares, names
+        return names
 
     @staticmethod
-    def _validate_position(
+    def extract_squares(
+        board: NDArray[np.uint8],
+        flip: bool = False,
+    ) -> NDArray[np.uint8]:
+        """Extract individual squares from board image.
+
+        Args:
+            board: A 512x512 image of a chessboard
+            flip: Whether to flip the board orientation
+
+        Returns:
+            Array of square images (64, 64, 64, 1)
+        """
+        # Calculate square size
+        h, w = board.shape
+        square_h, square_w = h // 8, w // 8
+
+        # Create a view of the board as 8x8 grid of squares
+        squares = board.reshape(8, square_h, 8, square_w)
+        squares = squares.transpose(0, 2, 1, 3)  # Reorder to get squares in correct order
+        squares = squares.reshape(64, square_h, square_w)  # Flatten to 64 squares
+
+        if flip:
+            # Reverse both rows and columns order when flipping
+            squares = squares.reshape(8, 8, square_h, square_w)
+            squares = squares[::-1, ::-1]  # Flip both dimensions
+            squares = squares.reshape(64, square_h, square_w)
+
+        # Add channel dimension
+        squares = squares.reshape(64, square_h, square_w, 1)
+
+        return squares
+
+    @staticmethod
+    def validate_position(
         pred_labels: list[str],
         probabilities: NDArray[np.float32],
-        square_names: list[str],
+        square_names: list[str],s,
     ) -> list[str]:
         """Apply chess logic to validate and fix predictions.
 
