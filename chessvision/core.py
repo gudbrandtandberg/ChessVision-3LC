@@ -210,13 +210,17 @@ class ChessVision:
 
         Args:
             board_image: Extracted board image (grayscale)
-            flip: Whether to flip the board orientation
+            flip: Whether the board is viewed from Black's perspective. This affects how the
+                 squares are mapped to the FEN string:
+                 - When flip=False: squares are mapped a8->h8, a7->h7, ..., a1->h1 (White's perspective)
+                 - When flip=True:  squares are mapped h1->a1, h2->a2, ..., h8->a8 (Black's perspective)
+                 Note that the FEN string is always from White's perspective, as per the FEN standard.
 
         Returns:
             PositionResult containing classification results
         """
         # Extract individual squares and get square names
-        squares = self.extract_squares(board_image, flip)
+        squares = self.extract_squares(board_image)
         square_names = constants.SQUARE_NAMES_FLIPPED if flip else constants.SQUARE_NAMES_NORMAL
 
         # Prepare batch for model
@@ -407,13 +411,11 @@ class ChessVision:
     @staticmethod
     def extract_squares(
         board: NDArray[np.uint8],
-        flip: bool = False,
     ) -> NDArray[np.uint8]:
         """Extract individual squares from board image.
 
         Args:
-            board: A 512x512 image of a chessboard
-            flip: Whether to flip the board orientation
+            board: A 512x512 grayscale image of a chessboard
 
         Returns:
             Array of square images (64, 64, 64, 1)
@@ -425,14 +427,7 @@ class ChessVision:
         # Create a view of the board as 8x8 grid of squares
         squares = board.reshape(8, square_h, 8, square_w)
         squares = squares.transpose(0, 2, 1, 3)  # Reorder to get squares in correct order
-        squares = squares.reshape(64, square_h, square_w)  # Flatten to 64 squares
-
-        if flip:
-            # Reverse both rows and columns order when flipping
-            squares = squares.reshape(8, 8, square_h, square_w)
-            squares = squares[::-1, ::-1]  # Flip both dimensions
-            squares = squares.reshape(64, square_h, square_w)
-
+        squares = squares.reshape(64, square_h, square_w)
         return squares.reshape(64, square_h, square_w, 1)
 
     @staticmethod
