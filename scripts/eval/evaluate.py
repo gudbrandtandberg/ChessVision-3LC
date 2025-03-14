@@ -168,7 +168,7 @@ def get_test_generator(test_table: tlc.Table) -> Generator[tuple[np.ndarray, str
 
 
 def save_svg(chessboard: chess.Board, path: Path) -> None:
-    svg = chess.svg.board(chessboard)
+    svg = chess.svg.board(chessboard, size=512)
     cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=str(path))
 
 

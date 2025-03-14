@@ -73,6 +73,8 @@ class ChessVision:
         if self._classifier is None:
             self._initialize_classifier()
         assert self._classifier is not None
+        if hasattr(self._classifier, "metadata"):
+            logger.info(f"Classifier metadata: {self._classifier.metadata}")
         return self._classifier
 
     def _initialize_board_extractor(self) -> None:
@@ -85,6 +87,9 @@ class ChessVision:
             self._board_extractor_weights,
             self.device,
         )
+        if hasattr(self._board_extractor, "metadata"):
+            logger.info(f"Board extractor metadata: {self._board_extractor.metadata}")
+
         self._board_extractor.eval()
         self._board_extractor.to(self.device)
 
