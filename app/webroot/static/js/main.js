@@ -261,6 +261,10 @@ var invokeLocalContainer = function(payload) {
         dataType: 'json',
         timeout: 10000,
         success: function(data) {
+            console.log("Container response:", data);
+            if (typeof data === 'string') {
+                data = JSON.parse(data);
+            }
             uploadSuccess(data);
         },
         error: function(xmlHttpRequest, textStatus, errorThrown) {
@@ -286,10 +290,15 @@ var invokeLocalServer = function(payload) {
         dataType: 'json',
         timeout: 10000,
         success: function(data) {
+            console.log("Server response:", data);
+            if (typeof data === 'string') {
+                data = JSON.parse(data);
+            }
             uploadSuccess(data);
         },
         error: function(xmlHttpRequest, textStatus, errorThrown) {
             unsetSpinner()
+            console.log("Server error response:", xmlHttpRequest.responseText);
             if (xmlHttpRequest.readyState == 0 || xmlHttpRequest.status == 0) {
                 alert("Connection to ChessVision server failed.")
                 console.log(textStatus);
@@ -312,8 +321,11 @@ var invokeLambda = function(payload) {
         if (error) {
             prompt(error);
         } else {
+            console.log("Lambda raw response:", data);
             var payload = JSON.parse(data.Payload);
+            console.log("Lambda parsed payload:", payload);
             var body = JSON.parse(payload.body);
+            console.log("Lambda parsed body:", body);
             var statusCode = JSON.parse(payload.statusCode);
 
             if (statusCode == 200) {
@@ -327,7 +339,14 @@ var invokeLambda = function(payload) {
 };
 
 var uploadSuccess = function(data) {
-    //parse data = {FEN: "...", id: "..."}
+    console.log("uploadSuccess received data:", data);
+    
+    if (!data || (!data.FEN && !data.fen)) {
+        console.error("Invalid data received:", data);
+        alert("Invalid response from server");
+        unsetSpinner();
+        return;
+    }
 
     unsetSpinner()
 
@@ -335,23 +354,21 @@ var uploadSuccess = function(data) {
     $("#preview-container").hide()
     $("#edit-analyze-pane").show()
     board.resize()
-    setFEN(data.FEN)
-    effectivePredictedFEN = data.FEN
+    
+    // Use either FEN or fen from the response
+    const fenValue = data.FEN || data.fen;
+    setFEN(fenValue)
+    effectivePredictedFEN = fenValue
     effectiveCorrectedFEN = effectivePredictedFEN;
+
+    console.log("After setFEN - board position:", board.position());
+    console.log("After setFEN - game FEN:", game.fen());
 
     if (data.id) {
         $("#raw-id-input").val(data.id);
         effectiveRawId = data.id;
     }
 
-    //$("#needle-wrapper").show()
-    // if (res.score != "None") {
-    //     setScore(res.score)
-    // } else if (res.mate != "None") {
-    //     setMate(res.mate)
-    // } else {
-    //     alert("Position is invalid, cannot provide analysis")
-    // }
     $("#flip-pane").hide()
 };
 
@@ -501,6 +518,7 @@ var requestAnalysis = function() {
 
 var expandFen = function(fen) {
     //rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR+b+KQkq+-
+    console.log("expandFen input:", fen);
     var move = document.querySelector('input[name="move"]:checked').value;
     var castle = "KQkq"
     var ep = "-"
@@ -513,15 +531,27 @@ var expandFen = function(fen) {
         fen += sep
         fen += toAdd[i]
     }
-
+    console.log("expandFen output:", fen);
     return fen
 }
 
 var setFEN = function(fen) {
-    game.load(expandFen(fen))
-    orientation = document.getElementById("reversed-input").checked ? "black" : "white"
-    board.orientation(orientation)
-    board.position(fen, true)
+    console.log("setFEN input:", fen);
+    var expandedFen = expandFen(fen);
+    console.log("setFEN expanded:", expandedFen);
+    
+    game.load(expandedFen);
+    console.log("After game.load - game FEN:", game.fen());
+    
+    orientation = document.getElementById("reversed-input").checked ? "black" : "white";
+    board.orientation(orientation);
+    
+    var finalPosition = game.fen();
+    console.log("Setting board position to:", finalPosition);
+    board.position(finalPosition, true);
+    
+    console.log("Final board position:", board.position());
+    console.log("Final game FEN:", game.fen());
 }
 
 var setMate = function(mate) {
