@@ -217,7 +217,7 @@ class ChessVision:
         """
         # Extract individual squares and get square names
         squares = self.extract_squares(board_image, flip)
-        square_names = self._get_square_names(flip)
+        square_names = constants.SQUARE_NAMES_FLIPPED if flip else constants.SQUARE_NAMES_NORMAL
 
         # Prepare batch for model
         batch = torch.Tensor(squares).permute(0, 3, 1, 2).to(self.device)
@@ -405,30 +405,6 @@ class ChessVision:
         return np.array(approx * sf, dtype=np.float32)
 
     @staticmethod
-    def _get_square_names(flip: bool = False) -> list[str]:
-        """Get the list of square names in standard chess notation.
-
-        Args:
-            flip: Whether to flip the board orientation
-
-        Returns:
-            List of square names (e.g. ['a8', 'b8', ...])
-        """
-        ranks = ["a", "b", "c", "d", "e", "f", "g", "h"]
-        files = ["1", "2", "3", "4", "5", "6", "7", "8"]
-
-        if flip:
-            ranks = list(reversed(ranks))
-            files = list(reversed(files))
-
-        names = []
-        for i in range(8):
-            for j in range(8):
-                names.append(ranks[j] + files[7 - i])
-
-        return names
-
-    @staticmethod
     def extract_squares(
         board: NDArray[np.uint8],
         flip: bool = False,
@@ -457,16 +433,13 @@ class ChessVision:
             squares = squares[::-1, ::-1]  # Flip both dimensions
             squares = squares.reshape(64, square_h, square_w)
 
-        # Add channel dimension
-        squares = squares.reshape(64, square_h, square_w, 1)
-
-        return squares
+        return squares.reshape(64, square_h, square_w, 1)
 
     @staticmethod
     def validate_position(
         pred_labels: list[str],
         probabilities: NDArray[np.float32],
-        square_names: list[str],s,
+        square_names: list[str],
     ) -> list[str]:
         """Apply chess logic to validate and fix predictions.
 
