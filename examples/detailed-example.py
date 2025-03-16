@@ -94,9 +94,6 @@ def main() -> None:
         if result.position:
             print("\nPosition Analysis:")
             print(f"FEN: {result.position.fen}")
-            print("\nSquare Confidence Scores:")
-            for square, confidence in result.position.confidence_scores.items():
-                print(f"  {square}: {confidence:.2%}")
 
             print("\nPredicted Position:")
             print_board_ascii(result.position.fen)
@@ -106,7 +103,7 @@ def main() -> None:
             first_row_indices = range(0, 8)  # a8 to h8
             for i in first_row_indices:
                 square_name = result.position.square_names[i]
-                predictions = result.position.predictions[i]
+                predictions = result.position.model_probabilities[i]
                 probabilities = softmax(torch.tensor(predictions), dim=0)
                 top_k = torch.topk(probabilities, k=3)
 

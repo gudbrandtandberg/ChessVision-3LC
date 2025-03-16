@@ -4,7 +4,7 @@
 # Edit the arguments below as needed
 
 python scripts/eval/evaluate.py \
-    --image-folder "data/test/intitial/raw" \
+    --image-folder "data/test/initial/raw" \
     --threshold 0.5 \
     --project-name "chessvision-testing" \
     --run-name "" \
@@ -12,4 +12,6 @@ python scripts/eval/evaluate.py \
     --board-extractor-weights "" \
     --classifier-weights "" \
     --classifier-model-id "yolo" \
-#    --table-name "merged-2024-11-04-2024-11-04"
+    --include-metrics-table \
+    # --table-name "merged-2024-11-04-2024-11-04"
+    

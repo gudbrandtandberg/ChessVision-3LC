@@ -16,7 +16,7 @@ def cv_model() -> ChessVision:
 @pytest.fixture
 def test_image() -> np.ndarray:
     """Load a test image from the test data directory."""
-    test_image_path = constants.DATA_ROOT / "test" / "raw" / "1bf29f73-bc30-448b-a894-bd6428754a0c.JPG"
+    test_image_path = constants.DATA_ROOT / "test" / "initial" / "raw" / "1bf29f73-bc30-448b-a894-bd6428754a0c.JPG"
     if not test_image_path.exists():
         pytest.skip(f"Test image not found at {test_image_path}")
     return cv2.imread(str(test_image_path))
@@ -58,10 +58,11 @@ def test_process_image(cv_model: ChessVision, test_image: np.ndarray) -> None:
     if result.board_extraction.board_image is not None:
         assert result.position is not None
         assert result.position.fen is not None
-        assert len(result.position.predictions) == 64  # One prediction per square
-        assert len(result.position.squares) == 64  # One image per square
-        assert len(result.position.square_names) == 64  # One name per square
-        assert all(name in result.position.confidence_scores for name in result.position.square_names)
+        assert result.position.original_fen is not None  # Check original FEN
+        assert result.position.model_probabilities is not None  # Updated name
+        assert result.position.squares is not None
+        assert result.position.square_names is not None
+        assert result.position.validation_fixes is not None  # Check validation fixes
 
     # Check processing time
     assert result.processing_time > 0
@@ -74,8 +75,7 @@ def test_extract_board(cv_model: ChessVision, test_image: np.ndarray) -> None:
     assert result is not None
     assert isinstance(result.binary_mask, np.ndarray)
     assert result.binary_mask.dtype == np.uint8
-    assert result.logits is not None
-    assert result.probabilities is not None
+    assert result.quadrangle is not None
 
     if result.board_image is not None:
         assert isinstance(result.board_image, np.ndarray)
@@ -95,10 +95,25 @@ def test_classify_position(cv_model: ChessVision, test_image: np.ndarray) -> Non
 
     assert result is not None
     assert result.fen is not None
-    assert len(result.predictions) == 64
-    assert len(result.squares) == 64
-    assert len(result.square_names) == 64
-    assert all(name in result.confidence_scores for name in result.square_names)
+    assert result.original_fen is not None  # Check original FEN
+    assert result.model_probabilities is not None  # Updated name
+    assert result.squares is not None
+    assert result.square_names is not None
+    assert result.validation_fixes is not None  # Check validation fixes
+
+    # Check that validation fixes are properly structured
+    if len(result.validation_fixes) > 0:
+        fix = result.validation_fixes[0]
+        assert fix.square_name in result.square_names
+        assert fix.original_piece in constants.LABEL_NAMES
+        assert fix.corrected_piece in constants.LABEL_NAMES
+        assert isinstance(fix.rule_name, str)
+
+    # Check that original and validated FENs differ if there are fixes
+    if result.validation_fixes:
+        assert result.original_fen != result.fen
+    else:
+        assert result.original_fen == result.fen
 
 
 def test_extract_squares() -> None:

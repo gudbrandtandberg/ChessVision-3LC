@@ -56,7 +56,6 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov",
     "ruff",
-    "mypy",
     "types-tqdm",
     "jupyter",
     "ipywidgets",
@@ -155,6 +154,7 @@ exclude = [
     "app/*",
     ".venv/*",
     "notebooks/*",
+    "container/*",
 ]
 
 [[tool.mypy.overrides]]

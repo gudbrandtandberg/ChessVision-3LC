@@ -8,13 +8,12 @@ import time
 import chess
 import cv2
 import numpy as np
-import timm
 import torch
 from numpy.typing import NDArray
 from torch.nn.functional import softmax
 
 from . import constants, utils
-from .cv_types import BoardExtractionResult, ChessVisionResult, PositionResult
+from .cv_types import BoardExtractionResult, ChessVisionResult, PositionResult, ValidationFix
 from .pytorch_unet.unet.unet_model import UNet
 
 logger = logging.getLogger(__name__)
@@ -211,19 +210,7 @@ class ChessVision:
         board_image: NDArray[np.uint8],
         flip: bool = False,
     ) -> PositionResult:
-        """Classify chess position from an extracted board image.
-
-        Args:
-            board_image: Extracted board image (grayscale)
-            flip: Whether the board is viewed from Black's perspective. This affects how the
-                 squares are mapped to the FEN string:
-                 - When flip=False: squares are mapped a8->h8, a7->h7, ..., a1->h1 (White's perspective)
-                 - When flip=True:  squares are mapped h1->a1, h2->a2, ..., h8->a8 (Black's perspective)
-                 Note that the FEN string is always from White's perspective, as per the FEN standard.
-
-        Returns:
-            PositionResult containing classification results
-        """
+        """Classify chess position from an extracted board image."""
         # Extract individual squares and get square names
         squares = self.extract_squares(board_image)
         square_names = constants.SQUARE_NAMES_FLIPPED if flip else constants.SQUARE_NAMES_NORMAL
@@ -236,16 +223,12 @@ class ChessVision:
         with torch.no_grad():
             predictions = self.classifier(batch)
             probabilities = predictions if self._classifier_model_id == "yolo" else softmax(predictions, dim=1)
+            probabilities_np = probabilities.detach().cpu().numpy()
 
-        # Process results
-        predictions_np = predictions.detach().cpu().numpy()
-        probabilities_np = probabilities.detach().cpu().numpy()
-
-        return self.process_classifier_logits(
-            predictions_np,
-            probabilities_np,
-            square_names,
-            squares,
+        return self.process_position_probabilities(
+            probabilities=probabilities_np,
+            square_names=square_names,
+            square_crops=squares,
         )
 
     @staticmethod
@@ -282,10 +265,9 @@ class ChessVision:
             logger.info("Failed to extract board from image")
             return BoardExtractionResult(
                 board_image=None,
-                logits=logits,
-                probabilities=probabilities,
                 binary_mask=binary_mask,
                 quadrangle=None,
+                probabilities=logits,
             )
 
         # Scale quadrangle to original image size
@@ -302,53 +284,57 @@ class ChessVision:
 
         return BoardExtractionResult(
             board_image=board,
-            logits=logits,
-            probabilities=probabilities,
             binary_mask=binary_mask,
             quadrangle=scaled_quad,
+            probabilities=logits,
         )
 
     @staticmethod
-    def process_classifier_logits(
-        predictions: NDArray[np.float32],
+    def process_position_probabilities(
         probabilities: NDArray[np.float32],
         square_names: list[str],
-        squares: NDArray[np.uint8],
+        square_crops: NDArray[np.uint8],
     ) -> PositionResult:
-        """Process classifier predictions and probabilities.
+        """Process model probabilities into a chess position with validation.
 
         Args:
-            predictions: Model predictions (logits for ResNet, probabilities for YOLO)
-            probabilities: Softmax probabilities
-            square_names: Names of squares in order
-            squares: Array of square images
+            probabilities: Model probability distributions (64, 13)
+            square_names: Names of squares in order (a8-h8, a7-h7, ..., a1-h1)
+            square_crops: Array of square images (64, 64, 64, 1)
 
         Returns:
-            PositionResult containing classification results
+            PositionResult containing both original and validated positions
         """
-        # Calculate confidence scores using probabilities
-        confidence_scores = {name: float(prob.max()) for name, prob in zip(square_names, probabilities)}
-
         # Get initial predictions from probabilities
         initial_predictions = np.argmax(probabilities, axis=1)
         pred_labels = [constants.LABEL_NAMES[p] for p in initial_predictions]
 
-        # Apply chess logic to fix potential errors
-        pred_labels = ChessVision.validate_position(pred_labels, probabilities, square_names)
-
-        # Create chess board from labels
+        # Create initial board
         board = chess.BaseBoard(board_fen=None)
         for pred_label, sq in zip(pred_labels, square_names):
             piece = None if pred_label == "f" else chess.Piece.from_symbol(pred_label)
             square = chess.SQUARE_NAMES.index(sq)
             board.set_piece_at(square, piece, promoted=False)
 
+        original_fen = board.board_fen(promoted=False)
+
+        # Apply validation rules
+        validated_labels, fixes = ChessVision.validate_position(pred_labels, probabilities, square_names)
+
+        # Create final board with validated position
+        board = chess.BaseBoard(board_fen=None)
+        for pred_label, sq in zip(validated_labels, square_names):
+            piece = None if pred_label == "f" else chess.Piece.from_symbol(pred_label)
+            square = chess.SQUARE_NAMES.index(sq)
+            board.set_piece_at(square, piece, promoted=False)
+
         return PositionResult(
             fen=board.board_fen(promoted=False),
-            predictions=predictions,
-            squares=squares,
+            original_fen=original_fen,
+            model_probabilities=probabilities,  # Store raw model probabilities
+            squares=square_crops,
             square_names=square_names,
-            confidence_scores=confidence_scores,
+            validation_fixes=fixes,
         )
 
     @staticmethod
@@ -440,124 +426,125 @@ class ChessVision:
         pred_labels: list[str],
         probabilities: NDArray[np.float32],
         square_names: list[str],
-    ) -> list[str]:
-        """Apply chess logic to validate and fix predictions.
+    ) -> tuple[list[str], list[ValidationFix]]:
+        """Apply chess rules to validate and fix predictions."""
+        fixes: list[ValidationFix] = []
 
-        Args:
-            pred_labels: Initial piece predictions for each square
-            probabilities: Raw model probabilities
-            square_names: Names of squares in order
-
-        Returns:
-            Validated and potentially corrected piece labels
-        """
         # Get sorted probabilities for each square
         argsorted_probs = np.argsort(probabilities)
-        sorted_probs = np.take_along_axis(probabilities, argsorted_probs, axis=-1)
 
-        # Fix pawns on first/last rank
+        # Rule 1: No pawns on first/last rank
         for i, (label, name) in enumerate(zip(pred_labels, square_names)):
             if name in constants.INVALID_PAWN_SQUARES and label in ["P", "p"]:
-                # Get next best prediction that isn't a pawn
+                # Find next best non-pawn prediction
                 for alt_idx in argsorted_probs[i][::-1]:
                     alt_piece = constants.LABEL_NAMES[alt_idx]
                     if alt_piece not in ["P", "p"]:
+                        fixes.append(
+                            ValidationFix(
+                                square_name=name,
+                                original_piece=label,
+                                corrected_piece=alt_piece,
+                                rule_name="no_pawns_on_ends",
+                            ),
+                        )
                         pred_labels[i] = alt_piece
                         break
 
-        # Fix bishops (no more than one per color square per side)
-        white_bishops: dict[str, list[tuple[int, float]]] = {"dark": [], "light": []}
-        black_bishops: dict[str, list[tuple[int, float]]] = {"dark": [], "light": []}
+        # # Rule 2: One king per color
+        # # Find all white kings
+        # white_king_squares = [
+        #     (i, probabilities[i, constants.LABEL_INDICES["K"]]) for i, label in enumerate(pred_labels) if label == "K"
+        # ]
+        # if len(white_king_squares) > 1:
+        #     # Sort by probability, keep the most likely king
+        #     white_king_squares.sort(key=lambda x: x[1], reverse=True)
+        #     # Fix all but the most likely king
+        #     for square_idx, _ in white_king_squares[1:]:
+        #         # Find next best non-king prediction
+        #         for alt_idx in argsorted_probs[square_idx][::-1]:
+        #             alt_piece = constants.LABEL_NAMES[alt_idx]
+        #             if alt_piece != "K":
+        #                 fixes.append(
+        #                     ValidationFix(
+        #                         square_name=square_names[square_idx],
+        #                         original_piece="K",
+        #                         corrected_piece=alt_piece,
+        #                         rule_name="one_king_per_color",
+        #                     ),
+        #                 )
+        #                 pred_labels[square_idx] = alt_piece
+        #                 break
 
-        # Find all bishops
-        for i, (label, name) in enumerate(zip(pred_labels, square_names)):
-            if label == "B":
-                color = "dark" if name in constants.DARK_SQUARES else "light"
-                white_bishops[color].append((i, sorted_probs[i][-1]))
-            elif label == "b":
-                color = "dark" if name in constants.DARK_SQUARES else "light"
-                black_bishops[color].append((i, sorted_probs[i][-1]))
+        # # Same for black kings
+        # black_king_squares = [
+        #     (i, probabilities[i, constants.LABEL_INDICES["k"]]) for i, label in enumerate(pred_labels) if label == "k"
+        # ]
+        # if len(black_king_squares) > 1:
+        #     black_king_squares.sort(key=lambda x: x[1], reverse=True)
+        #     for square_idx, _ in black_king_squares[1:]:
+        #         for alt_idx in argsorted_probs[square_idx][::-1]:
+        #             alt_piece = constants.LABEL_NAMES[alt_idx]
+        #             if alt_piece != "k":
+        #                 fixes.append(
+        #                     ValidationFix(
+        #                         square_name=square_names[square_idx],
+        #                         original_piece="k",
+        #                         corrected_piece=alt_piece,
+        #                         rule_name="one_king_per_color",
+        #                     ),
+        #                 )
+        #                 pred_labels[square_idx] = alt_piece
+        #                 break
 
-        # Fix duplicate bishops
-        for bishops in [white_bishops, black_bishops]:
-            for color in ["dark", "light"]:
-                if len(bishops[color]) > 1:
-                    # Keep the bishop with highest confidence
-                    bishops[color].sort(key=lambda x: x[1], reverse=True)
-                    # Change others to next best prediction
-                    for idx, _ in bishops[color][1:]:
-                        for alt_idx in argsorted_probs[idx][::-1]:
-                            alt_piece = constants.LABEL_NAMES[alt_idx]
-                            if alt_piece not in ["B", "b"]:
-                                pred_labels[idx] = alt_piece
-                                break
+        # # Rule 3: Maximum two bishops per color
+        # # Handle white bishops
+        # white_bishop_squares = [
+        #     (i, probabilities[i, constants.LABEL_INDICES["B"]]) for i, label in enumerate(pred_labels) if label == "B"
+        # ]
+        # if len(white_bishop_squares) > 2:
+        #     # Sort by probability, keep the two most likely bishops
+        #     white_bishop_squares.sort(key=lambda x: x[1], reverse=True)
+        #     # Fix all extra bishops beyond the first two
+        #     for square_idx, _ in white_bishop_squares[2:]:
+        #         # Find next best non-bishop prediction
+        #         for alt_idx in argsorted_probs[square_idx][::-1]:
+        #             alt_piece = constants.LABEL_NAMES[alt_idx]
+        #             if alt_piece != "B":
+        #                 fixes.append(
+        #                     ValidationFix(
+        #                         square_name=square_names[square_idx],
+        #                         original_piece="B",
+        #                         corrected_piece=alt_piece,
+        #                         rule_name="max_two_bishops",
+        #                     ),
+        #                 )
+        #                 pred_labels[square_idx] = alt_piece
+        #                 break
 
-        return pred_labels
+        # # Handle black bishops
+        # black_bishop_squares = [
+        #     (i, probabilities[i, constants.LABEL_INDICES["b"]]) for i, label in enumerate(pred_labels) if label == "b"
+        # ]
+        # if len(black_bishop_squares) > 2:
+        #     black_bishop_squares.sort(key=lambda x: x[1], reverse=True)
+        #     for square_idx, _ in black_bishop_squares[2:]:
+        #         for alt_idx in argsorted_probs[square_idx][::-1]:
+        #             alt_piece = constants.LABEL_NAMES[alt_idx]
+        #             if alt_piece != "b":
+        #                 fixes.append(
+        #                     ValidationFix(
+        #                         square_name=square_names[square_idx],
+        #                         original_piece="b",
+        #                         corrected_piece=alt_piece,
+        #                         rule_name="max_two_bishops",
+        #                     ),
+        #                 )
+        #                 pred_labels[square_idx] = alt_piece
+        #                 break
 
-    @staticmethod
-    def get_classifier_model(model_id: str = "resnet18") -> torch.nn.Module:
-        """Initialize the piece classifier model.
+        # Debug print fixes:
+        # for fix in fixes:
+        #     print(f"{fix.square_name} {fix.original_piece} -> {fix.corrected_piece}")
 
-        Returns:
-            ResNet18 model configured for chess piece classification
-        """
-        return timm.create_model(  # type: ignore
-            model_id,
-            num_classes=constants.NUM_CLASSES,
-            in_chans=1,
-        )
-
-    @classmethod
-    def load_model_checkpoint(
-        cls,
-        model: torch.nn.Module,
-        checkpoint_path: str,
-        device: torch.device | None = None,
-    ) -> torch.nn.Module:
-        """Load a model checkpoint.
-
-        This is a convenience method for loading model checkpoints during training
-        or evaluation. It handles both old and new checkpoint formats.
-
-        Args:
-            model: Model to load weights into
-            checkpoint_path: Path to checkpoint file
-            device: Optional device to load the checkpoint to
-
-        Returns:
-            Model with loaded weights
-        """
-        if device is None:
-            device = utils.get_device()
-
-        state_dict = torch.load(checkpoint_path, map_location=device)
-
-        # Handle different checkpoint formats
-        if isinstance(state_dict, dict):
-            if "model_state_dict" in state_dict:
-                # New format with metadata
-                model.load_state_dict(state_dict["model_state_dict"])
-                metadata = state_dict.get("metadata", {})
-            elif "state_dict" in state_dict:
-                # timm format
-                model.load_state_dict(state_dict["state_dict"])
-                metadata = state_dict.get("metadata", {})
-            else:
-                # Old format - state_dict is directly the model weights
-                # or has "model" key instead of "model_state_dict"
-                if "model" in state_dict:
-                    model_weights = state_dict["model"]
-                    metadata = state_dict.get("metadata", {})
-                else:
-                    model_weights = state_dict
-                    metadata = {}
-                model.load_state_dict(model_weights)
-        else:
-            # Direct state dict
-            model.load_state_dict(state_dict)
-            metadata = {}
-
-        if metadata:
-            model.metadata = metadata
-
-        return model
+        return pred_labels, fixes

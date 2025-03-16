@@ -83,7 +83,7 @@ def get_or_create_tables(
             tables = create_tables()
         else:
             logger.warning(f"Could not find tables: {train_table_name} and {val_table_name}")
-            raise FileNotFoundError(train_table_name)
+            raise FileNotFoundError(train_table_name) from None
 
     return tables
 
