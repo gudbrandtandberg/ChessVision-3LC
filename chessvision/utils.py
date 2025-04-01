@@ -185,7 +185,51 @@ def display_comparison(
     plt.show()
 
 
-def load_yolo_model(model_weights: str) -> torch.nn.Module:
+def load_yolo_segmentation_model(model_weights: str) -> torch.nn.Module:
+    """Load a YOLO model for board segmentation.
+
+    Args:
+        model_weights: Path to YOLO model weights
+    """
+    try:
+        # from ultralytics.utils.tlc import TLCYOLO as YOLO
+        from ultralytics import YOLO
+    except ImportError:
+        try:
+            from ultralytics import YOLO
+        except ImportError:
+            raise ImportError(
+                "YOLO model requires ultralytics package. Please install with 'pip install git+https://github.com/3lc-ai/ultralytics.git'."
+            )
+
+    class SEGYOLOModelWrapper:
+        def __init__(self, model: YOLO):
+            self.model = model
+
+        def __call__(self, img: torch.Tensor) -> torch.Tensor:
+            res = self.model(img, verbose=False)
+            try:
+                probs = [r.masks.data for r in res]
+            except AttributeError:
+                return torch.zeros((len(res), 1, 256, 256))
+            return torch.cat(probs)
+
+        def eval(self) -> None:
+            """Set the model to evaluation mode."""
+            self.model.eval()
+
+        def train(self) -> None:
+            """Set the model to training mode."""
+            self.model.train()
+
+        def to(self, device: torch.device) -> None:
+            """Move the model to a specific device."""
+            self.model.to(device)
+
+    return SEGYOLOModelWrapper(YOLO(model_weights))
+
+
+def load_yolo_classification_model(model_weights: str) -> torch.nn.Module:
     """Load a YOLO model for piece classification.
 
     Args:

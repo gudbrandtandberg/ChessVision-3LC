@@ -210,6 +210,7 @@ def evaluate_model(
     run_name: str = "",
     run_description: str = "",
     board_extractor_weights: str | None = None,
+    board_extractor_model_id: str = "",
     classifier_weights: str | None = None,
     classifier_model_id: str = "",
     include_metrics_table: bool = False,
@@ -226,6 +227,7 @@ def evaluate_model(
 
     cv = ChessVision(
         board_extractor_weights=board_extractor_weights,
+        board_extractor_model_id=board_extractor_model_id,
         classifier_weights=classifier_weights,
         classifier_model_id=classifier_model_id,
         lazy_load=False,

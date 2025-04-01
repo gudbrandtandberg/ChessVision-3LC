@@ -25,6 +25,7 @@ class ChessVision:
     def __init__(
         self,
         board_extractor_weights: str | None = None,
+        board_extractor_model_id: str | None = None,
         classifier_weights: str | None = None,
         classifier_model_id: str | None = None,
         lazy_load: bool = True,
@@ -34,6 +35,10 @@ class ChessVision:
         Args:
             board_extractor_weights: Path to board extraction model weights.
                                    If None, uses best available weights.
+            board_extractor_model_id: Model architecture to use. If None, tries YOLO first,
+                                     falling back to UNet if YOLO is not available.
+                                     If "yolo" is specified, fails if YOLO is not available.
+                                     Other values are passed directly to timm.
             classifier_weights: Path to piece classifier model weights.
                               If None, uses best available weights.
             classifier_model_id: Model architecture to use. If None, tries YOLO first,
@@ -48,7 +53,7 @@ class ChessVision:
         self._board_extractor: torch.nn.Module | None = None
         self._classifier: torch.nn.Module | None = None
         self._board_extractor_weights = board_extractor_weights or constants.BEST_EXTRACTOR_WEIGHTS
-
+        self._board_extractor_model_id = board_extractor_model_id
         self._classifier_weights = classifier_weights
         self._classifier_model_id = classifier_model_id
 
@@ -79,13 +84,19 @@ class ChessVision:
     def _initialize_board_extractor(self) -> None:
         """Initialize the board extraction model."""
         logger.info("Initializing board extraction model...")
-        self._board_extractor = UNet(n_channels=3, n_classes=1)
-        self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)  # type: ignore
-        self._board_extractor = utils.load_model_checkpoint(
-            self._board_extractor,  # type: ignore
-            self._board_extractor_weights,
-            self.device,
-        )
+        if self._board_extractor_model_id is None:
+            self._board_extractor = UNet(n_channels=3, n_classes=1)
+            self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)  # type: ignore
+            self._board_extractor = utils.load_model_checkpoint(
+                self._board_extractor,  # type: ignore
+                self._board_extractor_weights,
+                self.device,
+            )
+        elif self._board_extractor_model_id == "yolo":
+            self._board_extractor = utils.load_yolo_segmentation_model(self._board_extractor_weights)
+        else:
+            assert False, f"Invalid board extractor model ID: {self._board_extractor_model_id}"
+
         if hasattr(self._board_extractor, "metadata"):
             logger.info(f"Board extractor metadata: {self._board_extractor.metadata}")
 
@@ -99,7 +110,9 @@ class ChessVision:
         # If no model specified, try YOLO first
         if self._classifier_model_id is None:
             try:
-                self._classifier = utils.load_yolo_model(self._classifier_weights or constants.BEST_YOLO_CLASSIFIER)
+                self._classifier = utils.load_yolo_classification_model(
+                    self._classifier_weights or constants.BEST_YOLO_CLASSIFIER
+                )
                 self._classifier_model_id = "yolo"  # Mark as using YOLO
                 self._classifier_weights = self._classifier_weights or constants.BEST_YOLO_CLASSIFIER
                 logger.info(f"Loaded YOLO model from {self._classifier_weights or constants.BEST_YOLO_CLASSIFIER}")
@@ -115,7 +128,9 @@ class ChessVision:
                 self._classifier_weights = self._classifier_weights or constants.BEST_CLASSIFIER_WEIGHTS
         # If YOLO explicitly requested, try loading it or fail
         elif self._classifier_model_id == "yolo":
-            self._classifier = utils.load_yolo_model(self._classifier_weights or constants.BEST_YOLO_CLASSIFIER)
+            self._classifier = utils.load_yolo_classification_model(
+                self._classifier_weights or constants.BEST_YOLO_CLASSIFIER
+            )
             self._classifier_weights = self._classifier_weights or constants.BEST_YOLO_CLASSIFIER
             logger.info(f"Loaded YOLO model from {self._classifier_weights}")
         # Otherwise load the specified model through timm

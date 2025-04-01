@@ -113,4 +113,5 @@ if __name__ == "__main__":
             run=tlc.active_run(),
             classifier_weights=str(classifier_checkpoint),
             classifier_model_id="yolo",
+            table_name="merged-2024-11-04-2024-11-04",
         )

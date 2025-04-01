@@ -11,7 +11,7 @@ if __name__ == "__main__":
     model = YOLO("yolo11m-seg.pt")
 
     # settings = Settings(
-    #     project_name="chessvision-classification",
+    #     project_name="chessvision-yolo-segmentation",
     #     run_description="Train on cleaned training and val set",
     #     image_embeddings_dim=2,
     #     conf_thres=0.2,
@@ -34,6 +34,3 @@ if __name__ == "__main__":
     )
 
     print("Running tests with trained model...")
-    # del model
-    # model = YOLOModelWrapper(TLCYOLO(results.save_dir / "weights" / "best.pt"))
-    # run_tests(run=tlc.active_run(), classifier=model)
