@@ -52,7 +52,7 @@ class ChessVision:
         self.device = utils.get_device()
         self._board_extractor: torch.nn.Module | None = None
         self._classifier: torch.nn.Module | None = None
-        self._board_extractor_weights = board_extractor_weights or constants.BEST_EXTRACTOR_WEIGHTS
+        self._board_extractor_weights = board_extractor_weights
         self._board_extractor_model_id = board_extractor_model_id
         self._classifier_weights = classifier_weights
         self._classifier_model_id = classifier_model_id
@@ -93,7 +93,9 @@ class ChessVision:
                 self.device,
             )
         elif self._board_extractor_model_id == "yolo":
-            self._board_extractor = utils.load_yolo_segmentation_model(self._board_extractor_weights)
+            self._board_extractor = utils.load_yolo_segmentation_model(
+                self._board_extractor_weights or constants.BEST_YOLO_EXTRACTOR,
+            )
         else:
             assert False, f"Invalid board extractor model ID: {self._board_extractor_model_id}"
 

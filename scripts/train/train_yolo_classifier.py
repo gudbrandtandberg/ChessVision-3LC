@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import tlc
+import torch
 from ultralytics.utils.tlc import TLCYOLO, Settings
 
 from chessvision import constants
@@ -12,6 +13,10 @@ from scripts.train.create_classification_tables import get_or_create_tables
 from scripts.utils import setup_logger
 
 logger = logging.getLogger(__name__)
+
+
+def entropy(preds: torch.Tensor, batch: torch.Tensor) -> dict[str, torch.Tensor]:
+    return {"entropy": -torch.sum(preds * torch.log(preds), dim=1)}
 
 
 def train_model(
@@ -38,6 +43,7 @@ def train_model(
         exclude_zero_weight_collection=False,
         collection_epoch_start=1,
         collection_epoch_interval=collection_frequency,
+        metrics_collection_function=entropy,
     )
 
     tables = get_or_create_tables(

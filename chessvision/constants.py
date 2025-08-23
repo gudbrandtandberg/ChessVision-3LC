@@ -47,6 +47,7 @@ WEIGHTS_DIR = Path(CVROOT) / "weights"
 BEST_CLASSIFIER_WEIGHTS = str(WEIGHTS_DIR / "best_classifier.pth")
 BEST_EXTRACTOR_WEIGHTS = str(WEIGHTS_DIR / "best_extractor.pth")
 BEST_YOLO_CLASSIFIER = str(WEIGHTS_DIR / "best_yolo_classifier.pt")
+BEST_YOLO_EXTRACTOR = str(WEIGHTS_DIR / "best_yolo_extractor.pt")
 
 # Chess board constants
 DARK_SQUARES = {
@@ -104,6 +105,7 @@ INVALID_PAWN_SQUARES = {
 }
 
 # Pre-compute square names for both orientations
+# fmt: off
 SQUARE_NAMES_NORMAL = [
     "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
     "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
@@ -125,3 +127,4 @@ SQUARE_NAMES_FLIPPED = [
     "h7", "g7", "f7", "e7", "d7", "c7", "b7", "a7",
     "h8", "g8", "f8", "e8", "d8", "c8", "b8", "a8",
 ]
+# fmt: on

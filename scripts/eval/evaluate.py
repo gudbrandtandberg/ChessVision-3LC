@@ -472,6 +472,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--board-extractor-weights", type=str, help="Path to board extractor weights")
     parser.add_argument("--classifier-weights", type=str, help="Path to classifier weights")
     parser.add_argument("--classifier-model-id", type=str, default="yolo", help="Classifier model ID")
+    parser.add_argument("--board-extractor-model-id", type=str, default="yolo", help="Board extractor model ID")
     parser.add_argument("--table-name", type=str, default="initial", help="Table name")
     parser.add_argument("--include-metrics-table", action="store_true", help="Include metrics table")
     return parser.parse_args()
@@ -504,6 +505,7 @@ if __name__ == "__main__":
         run_description=args.run_description,
         threshold=args.threshold,
         board_extractor_weights=args.board_extractor_weights,
+        board_extractor_model_id=args.board_extractor_model_id,
         classifier_weights=args.classifier_weights,
         classifier_model_id=args.classifier_model_id,
         table_name=args.table_name,
