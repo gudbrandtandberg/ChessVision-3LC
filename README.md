@@ -132,8 +132,6 @@ For a detailed breakdown of each step in the pipeline, run the Python script:
 python examples/detailed-example.py
 ```
 
-Try it out using the example notebook `example.ipynb`.
-
 ## Training
 
 Main scripts for training and evaluating the models are located in the `scripts/` directory.
