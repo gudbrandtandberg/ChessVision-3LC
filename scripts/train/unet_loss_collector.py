@@ -8,6 +8,7 @@ import torch.nn as nn
 
 from chessvision import utils
 from chessvision.pytorch_unet.utils.dice_score import dice_loss
+from chessvision.utils import get_device
 
 
 class LossCollector(tlc.MetricsCollector):
@@ -15,7 +16,9 @@ class LossCollector(tlc.MetricsCollector):
         super().__init__()
         self.device = utils.get_device()
 
-    def compute_metrics(self, batch: dict[str, Any], predictor_output: tlc.PredictorOutput) -> dict[str, Any]:
+    def compute_metrics(
+        self, batch: dict[str, Any], predictor_output: tlc.PredictorOutput
+    ) -> dict[str, Any]:
         predictions = predictor_output.forward
         _, masks = batch["image"], batch["mask"]
         masks = masks.to(self.device)
@@ -30,7 +33,9 @@ class LossCollector(tlc.MetricsCollector):
             reduction="none",
         )
 
-        unreduced_bce_loss = unreduced_criterion(predictions, masks.float()).mean((-1, -2))
+        unreduced_bce_loss = unreduced_criterion(predictions, masks.float()).mean(
+            (-1, -2)
+        )
 
         loss = unreduced_dice_loss + unreduced_bce_loss
 

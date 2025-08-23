@@ -67,7 +67,14 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
 
-def crossdomain(origin=None, methods=None, headers=None, max_age=21600, attach_to_all=True, automatic_options=True):
+def crossdomain(
+    origin=None,
+    methods=None,
+    headers=None,
+    max_age=21600,
+    attach_to_all=True,
+    automatic_options=True,
+):
     if methods is not None:
         methods = ", ".join(sorted(x.upper() for x in methods))
     if headers is not None and not isinstance(headers, str):
@@ -173,7 +180,10 @@ def cv_algo() -> tuple[dict[str, str], int]:
 
             # Save the extracted board if available
             if result.board_extraction.board_image is not None:
-                cv2.imwrite(str(uploads_folder / "boards" / filename), result.board_extraction.board_image)
+                cv2.imwrite(
+                    str(uploads_folder / "boards" / filename),
+                    result.board_extraction.board_image,
+                )
 
         return flask.jsonify(response)
 
@@ -225,7 +235,10 @@ def classify_image() -> tuple[dict[str, str], int]:
 
             # Save the extracted board if available
             if result.board_extraction.board_image is not None:
-                cv2.imwrite(str(uploads_folder / "boards" / filename), result.board_extraction.board_image)
+                cv2.imwrite(
+                    str(uploads_folder / "boards" / filename),
+                    result.board_extraction.board_image,
+                )
 
         return flask.jsonify(response)
 
@@ -252,7 +265,9 @@ def feedback():
 
         # Required fields
         if not all(k in data for k in ["position", "flip", "predictedFEN", "id"]):
-            return json.dumps({"success": "false", "error": "Missing required fields"}), 400
+            return json.dumps(
+                {"success": "false", "error": "Missing required fields"}
+            ), 400
 
         # Save feedback if not in local mode
         if not os.getenv("LOCAL"):

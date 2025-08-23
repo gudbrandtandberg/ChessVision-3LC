@@ -66,6 +66,7 @@ dev = [
 ultralytics = { git = "https://github.com/3lc-ai/ultralytics.git" }
 
 [tool.ruff]
+exclude = ["chessvision/pytorch_unet"]
 line-length = 120
 target-version = "py39"
 

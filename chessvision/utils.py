@@ -98,7 +98,9 @@ def listdir_nohidden(path: str) -> list[str]:
     return [f for f in os.listdir(path) if not f.startswith(".")]
 
 
-def create_binary_mask(mask: NDArray[np.float32], threshold: float = 0.5) -> NDArray[np.uint8]:
+def create_binary_mask(
+    mask: NDArray[np.float32], threshold: float = 0.5
+) -> NDArray[np.uint8]:
     """Convert probability mask to binary mask."""
     assert isinstance(mask, np.ndarray), "Mask must be a numpy array"
     assert mask.dtype == np.float32, "Mask must be float32"

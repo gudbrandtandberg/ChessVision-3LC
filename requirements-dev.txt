@@ -1,0 +1,16 @@
+--extra-index-url https://download.pytorch.org/whl/cu118
+-e "../tlc-monorepo[umap,pacmap]"
+torchvision
+timm
+matplotlib
+jupyter
+ipywidgets
+Pillow
+mypy
+types-tqdm
+opencv-python
+python-chess
+tomli
+torchinfo
+cairosvg
+git+https://github.com/3lc-ai/ultralytics.git

@@ -31,7 +31,9 @@ if __name__ == "__main__":
     elif args.local == "server":
         endpoint = "server"
     else:
-        warnings.warn("--local flag must be either 'container' or 'server'", stacklevel=2)
+        warnings.warn(
+            "--local flag must be either 'container' or 'server'", stacklevel=2
+        )
         sys.exit(1)
 
     app.run(host="127.0.0.1", port=5000)
