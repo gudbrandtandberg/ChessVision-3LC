@@ -12,3 +12,14 @@ data/board_extraction/yolo/
 yolo_output/
 yolo*.pt
 app/computeroot/logs/cv_endpoint.log
+data/new_raw/
+scripts/docker/
+container
+Dockerfile
+.dockerignore
+.coverage
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.cursor/

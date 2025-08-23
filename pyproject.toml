@@ -1,15 +1,186 @@
-[tool.poetry]
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
 name = "chessvision"
 version = "0.1.0"
 description = "Classification of pieces and segmentation of boards in chess images"
-authors = ["Gudbrand Tandberg <gudbrandduff@fmail.com>"]
+authors = [
+    {name = "Gudbrand Tandberg", email = "gudbrandduff@fmail.com"},
+]
 readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "timm",
+    "Pillow",
+    "opencv-python",
+    "python-chess",
+    "torchinfo",
+    "cairosvg",
+    "numpy>=1.24.0",
+    "tqdm",
+    "flask>=3.1.0",
+]
+
+[project.optional-dependencies]
+yolo = [
+    "ultralytics",
+]
+tlc = [
+    "3lc[pacmap]",
+]
+viz = [
+    "plotly>=6.0.0",
+]
+boto = [
+    "boto3>=1.37.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov",
+    "ruff",
+    "types-tqdm",
+    "jupyter",
+    "ipywidgets",
+    "mypy==1.14",
+]
+
+[tool.uv.sources]
+ultralytics = { git = "https://github.com/3lc-ai/ultralytics.git" }
 
 [tool.ruff]
 exclude = ["chessvision/pytorch_unet"]
 line-length = 120
-select = ["C", "E", "F", "W", "I", "YTT", "UP"]
+target-version = "py39"
 
-[tool.black]
-line-length = 120
+# Exclude third-party code and generated files
+exclude = [
+    "chessvision/pytorch_unet",
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+
+mccabe.max-complexity = 16
+
+# Enable additional rules
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "C",    # flake8-comprehensions
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "N",    # pep8-naming
+    "YTT",  # flake8-2020
+    "S",    # flake8-bandit
+    "A",    # flake8-builtins
+    "COM",  # flake8-commas
+    "T20",  # flake8-print
+    "PT",   # flake8-pytest-style
+    "RET",  # flake8-return
+    "SIM",  # flake8-simplify
+    "ARG",  # flake8-unused-arguments
+    "PTH",  # flake8-use-pathlib
+    "PL",   # pylint
+    "TRY",  # tryceratops
+]
+
+# Never enforce these rules
+ignore = [
+    "PLR",    # Design related pylint codes - too opinionated
+    "S101",   # Use of assert - ok in tests
+    "E501",   # Line too long - handled by black
+    "PT012",  # pytest.raises() block too long - too strict
+]
+
+# Avoid trying to fix anything in tests
+unfixable = ["T20", "ERA001"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "T20"]  # Ignore security warnings and print statements in tests
+"examples/*" = ["T20"]    # Allow print statements in examples
+"scripts/*" = ["T20"]     # Allow print statements in scripts
+"notebooks/*" = ["T20"]   # Allow print statements in notebooks
+
+[tool.ruff.lint.isort]
+known-first-party = ["chessvision"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["torch.nn.Parameter", "Parameter", "torch.tensor", "torch.Tensor"]
+
+[tool.ruff.lint.pylint]
+max-args = 6  # Default is 5, slightly relax this
+max-branches = 12  # Default is 12
+
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+exclude = [
+    "chessvision/pytorch_unet/*",
+    "app/*",
+    ".venv/*",
+    "notebooks/*",
+    "container/*",
+]
+
+[[tool.mypy.overrides]]
+module = ["cv2.*", "timm.*", "torch.*", "torchvision.*", "boto3.*", "plotly.*", "ultralytics.*", "cairosvg.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tlc.*"]
+ignore_missing_imports = true
+ignore_errors = true
+
+[tool.coverage.run]
+omit = ["chessvision/pytorch_unet/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "--cov=chessvision --cov-report=term-missing --cov-report=xml"
+testpaths = ["tests"]
 

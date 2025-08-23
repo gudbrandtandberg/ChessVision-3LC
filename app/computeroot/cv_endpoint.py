@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from functools import update_wrapper
 from pathlib import Path
 
@@ -15,9 +15,7 @@ import numpy as np
 from flask import Flask, current_app, make_response, request
 from werkzeug.utils import secure_filename
 
-from chessvision.predict.classify_raw import classify_raw
-from chessvision.predict.extract_squares import extract_squares
-from chessvision.utils import DATA_ROOT
+from chessvision.core import ChessVision
 
 # Create necessary directories
 app_root = Path(__file__).parent
@@ -39,29 +37,44 @@ for piece_type in piece_types:
 
 # Set up logging
 class RequestFormatter(logging.Formatter):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         try:
             record.url = request.url
             record.remote_addr = request.remote_addr
-        except:
+        except Exception:
             record.url = "-"
             record.remote_addr = "-"
         return super().format(record)
 
 
-formatter = RequestFormatter("[%(asctime)s] %(remote_addr)s requested %(url)s. %(levelname)s in %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-logger = logging.getLogger("chessvision")
-file_handler = logging.FileHandler(str(logs_folder / "cv_endpoint.log"), "w")
-file_handler.setFormatter(formatter)
+formatter = RequestFormatter(
+    "[%(asctime)s] %(remote_addr)s requested %(url)s\n%(levelname)s in %(module)s: %(message)s",
+)
+
+if not os.getenv("LOCAL"):
+    log_file = logs_folder / "cv_endpoint.log"
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
 stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO)
+stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
-logger.addHandler(file_handler)
-logger.setLevel(logging.DEBUG)
 
 
-def crossdomain(origin=None, methods=None, headers=None, max_age=21600, attach_to_all=True, automatic_options=True):
-    """Decorator function that allows crossdomain requests."""
+def crossdomain(
+    origin=None,
+    methods=None,
+    headers=None,
+    max_age=21600,
+    attach_to_all=True,
+    automatic_options=True,
+):
     if methods is not None:
         methods = ", ".join(sorted(x.upper() for x in methods))
     if headers is not None and not isinstance(headers, str):
@@ -72,7 +85,6 @@ def crossdomain(origin=None, methods=None, headers=None, max_age=21600, attach_t
         max_age = max_age.total_seconds()
 
     def get_methods():
-        """Determines which methods are allowed"""
         if methods is not None:
             return methods
 
@@ -80,10 +92,7 @@ def crossdomain(origin=None, methods=None, headers=None, max_age=21600, attach_t
         return options_resp.headers["allow"]
 
     def decorator(f):
-        """The decorator function"""
-
         def wrapped_function(*args, **kwargs):
-            """Caries out the actual cross domain code"""
             if automatic_options and request.method == "OPTIONS":
                 resp = current_app.make_default_options_response()
             else:
@@ -92,11 +101,10 @@ def crossdomain(origin=None, methods=None, headers=None, max_age=21600, attach_t
                 return resp
 
             h = resp.headers
+
             h["Access-Control-Allow-Origin"] = origin
             h["Access-Control-Allow-Methods"] = get_methods()
             h["Access-Control-Max-Age"] = str(max_age)
-            h["Access-Control-Allow-Credentials"] = "true"
-            h["Access-Control-Allow-Headers"] = "Origin, X-Requested-With, Content-Type, Accept, Authorization"
             if headers is not None:
                 h["Access-Control-Allow-Headers"] = headers
             return resp
@@ -108,209 +116,192 @@ def crossdomain(origin=None, methods=None, headers=None, max_age=21600, attach_t
 
 
 app = Flask(__name__)
-app.config["UPLOAD_FOLDER"] = str(uploads_folder)
-app.config["TMP_FOLDER"] = str(tmp_folder)
-ALLOWED_EXTENSIONS = set(["png", "jpg", "jpeg", "gif"])
-
-app.secret_key = "super secret key"
 
 
-# Custom exception for board extraction errors
-class BoardExtractionError(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-    def json_string(self):
-        return f'{{"error": "true", "message": "{self.message}"}}'
-
-
-def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+def fen_2_json(fen: str) -> dict[str, str]:
+    piecemap = chess.Board(fen=fen).piece_map()
+    predicted = {}
+    for square_index in piecemap:
+        square = chess.SQUARE_NAMES[square_index]
+        predicted[square] = str(piecemap[square_index].symbol())
+    return predicted
 
 
-def read_image_from_b64(b64string):
-    buffer = base64.b64decode(b64string)
-    nparr = np.frombuffer(buffer, dtype=np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    return img
+# Initialize models globally
+cv_model = None
+with app.app_context():
+    cv_model = ChessVision(lazy_load=False)
 
 
 @app.route("/cv_algo/", methods=["POST", "OPTIONS"])
-@crossdomain(origin="*")
-def predict_img():
-    logger.info("CV-Algo invoked")
+@crossdomain(origin="*", headers=["Content-Type"])
+def cv_algo() -> tuple[dict[str, str], int]:
+    """Process image from web interface."""
 
-    if flask.request.content_type == "application/json":
-        print("Got data")
-        data = json.loads(flask.request.data.decode("utf-8"))
-        flipped = data.get("flip") == "true"
-        image = read_image_from_b64(data.get("image", ""))
+    if request.method == "OPTIONS":
+        return {"success": True}
 
-    if image is None:
-        print("Did not get data")
-        return flask.Response(response="Could not parse input!", status=415, mimetype="application/json")
-
-    raw_id = str(uuid.uuid4())
-    filename = secure_filename(raw_id) + ".JPG"
-    tmp_loc = os.path.join(app.config["TMP_FOLDER"], filename)
-
-    tmp_path = os.path.abspath(tmp_loc)
-    cv2.imwrite(tmp_path, image)
-
+    # Get the image data from JSON
     try:
-        logger.info(f"Processing image {filename}")
-        board_img, _, predictions, chessboard, FEN, squares, names = classify_raw(
-            image, filename, board_model, sq_model, flip=flipped
-        )
+        data = request.get_json()
+        if not data or "image" not in data:
+            return {"success": False, "error": "No image data provided"}, 400
 
-        if board_img is None:
-            raise BoardExtractionError("Could not extract chessboard from image")
+        # Decode base64 image
+        img_data = base64.b64decode(data["image"])
+        nparr = np.frombuffer(img_data, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-        # Move file to success raw folder
-        os.rename(tmp_loc, os.path.join(app.config["UPLOAD_FOLDER"], "raw", filename))
-        cv2.imwrite(os.path.join(app.config["UPLOAD_FOLDER"], "boards/x_" + filename), board_img)
+        if img is None:
+            return {"success": False, "error": "Invalid image data"}, 400
 
-    except BoardExtractionError as e:
-        # Move file to raw folder anyway
-        os.rename(tmp_loc, os.path.join(app.config["UPLOAD_FOLDER"], "raw", filename))
-        return e.json_string()
+        # Process the image with ChessVision
+        result = cv_model.process_image(img)
+
+        if result.position is None:
+            return {"success": False, "error": "No chessboard detected"}, 400
+
+        # Convert results to JSON
+        response = {
+            "success": True,
+            "fen": result.position.fen,
+            "position": fen_2_json(result.position.fen),
+            "confidence_scores": result.position.confidence_scores,
+            "processing_time": result.processing_time,
+        }
+
+        # Save results if needed
+        if not os.getenv("LOCAL"):
+            # Generate unique filename
+            filename = f"{uuid.uuid4()}.jpg"
+
+            # Save the original image
+            cv2.imwrite(str(uploads_folder / "raw" / filename), img)
+
+            # Save the extracted board if available
+            if result.board_extraction.board_image is not None:
+                cv2.imwrite(
+                    str(uploads_folder / "boards" / filename),
+                    result.board_extraction.board_image,
+                )
+
+        return flask.jsonify(response)
 
     except Exception as e:
-        logger.debug(f"Unexpected error: {e}")
-        return '{"error": "true", "message": "An unexpected error occurred"}'
-
-    ret = f'{{ "FEN": "{FEN}", "id": "{raw_id}", "error": "false"}}'
-    return ret
+        logger.exception("Error processing image")
+        return {"success": False, "error": str(e)}, 500
 
 
-def expandFEN(FEN, tomove):
-    return "{} {} - - 0 1".format(FEN, tomove)
+@app.route("/classify_image", methods=["POST"])
+def classify_image() -> tuple[dict[str, str], int]:
+    # Get the image from the POST request
+    if "image" not in request.files:
+        return "No image uploaded", 400
+
+    file = request.files["image"]
+    if file.filename == "":
+        return "No image selected", 400
+
+    # Save the image temporarily
+    filename = secure_filename(file.filename)
+    filepath = tmp_folder / filename
+    file.save(filepath)
+
+    # Read and process the image
+    img = cv2.imread(str(filepath))
+    if img is None:
+        return "Invalid image", 400
+
+    try:
+        # Process the image with ChessVision
+        result = cv_model.process_image(img)
+
+        if result.position is None:
+            return "No chessboard detected", 400
+
+        # Convert results to JSON
+        response = {
+            "success": True,
+            "fen": result.position.fen,
+            "position": fen_2_json(result.position.fen),
+            "confidence_scores": result.position.confidence_scores,
+            "processing_time": result.processing_time,
+        }
+
+        # Save results if needed
+        if not os.getenv("LOCAL"):
+            # Save the original image
+            cv2.imwrite(str(uploads_folder / "raw" / filename), img)
+
+            # Save the extracted board if available
+            if result.board_extraction.board_image is not None:
+                cv2.imwrite(
+                    str(uploads_folder / "boards" / filename),
+                    result.board_extraction.board_image,
+                )
+
+        return flask.jsonify(response)
+
+    except Exception as e:
+        logger.exception("Error processing image")
+        return str(e), 500
+
+    finally:
+        # Clean up temporary file
+        filepath.unlink(missing_ok=True)
 
 
-piece2dir = {
-    "R": "R",
-    "r": "_r",
-    "K": "K",
-    "k": "_k",
-    "Q": "Q",
-    "q": "_q",
-    "N": "N",
-    "n": "_n",
-    "P": "P",
-    "p": "_p",
-    "B": "B",
-    "b": "_b",
-    "f": "f",
-}
+@app.route("/feedback/", methods=["POST", "OPTIONS"])
+@crossdomain(origin="*", headers=["Content-Type"])
+def feedback():
+    """Handle user feedback on predictions."""
+    if request.method == "OPTIONS":
+        return {"success": True}
 
-dict = {
-    "wR": "R",
-    "bR": "r",
-    "wK": "K",
-    "bK": "k",
-    "wQ": "Q",
-    "bQ": "q",
-    "wN": "N",
-    "bN": "n",
-    "wP": "P",
-    "bP": "p",
-    "wB": "B",
-    "bB": "b",
-    "f": "f",
-}
+    try:
+        data = request.get_json()
+        if not data:
+            return json.dumps({"success": "false", "error": "No data provided"}), 400
 
+        # Required fields
+        if not all(k in data for k in ["position", "flip", "predictedFEN", "id"]):
+            return json.dumps(
+                {"success": "false", "error": "Missing required fields"}
+            ), 400
 
-def convertPosition(position):
-    new = {}
-    for key in position:
-        new[key] = dict[position[key]]
-    return new
+        # Save feedback if not in local mode
+        if not os.getenv("LOCAL"):
+            feedback_id = str(uuid.uuid4())
+            feedback_path = uploads_folder / "feedback" / f"{feedback_id}.json"
+            feedback_path.parent.mkdir(exist_ok=True)
 
+            with feedback_path.open("w") as f:
+                json.dump(
+                    {
+                        "id": data["id"],
+                        "position": data["position"],
+                        "flip": data["flip"],
+                        "predicted_fen": data["predictedFEN"],
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                    f,
+                    indent=2,
+                )
 
-def FEN2JSON(fen):
-    piecemap = chess.Board(fen=fen).piece_map()
-    predictedPos = {}
-    for square_index in piecemap:
-        square = chess.SQUARE_NAMES[square_index]
-        predictedPos[square] = str(piecemap[square_index].symbol())
-    return predictedPos
+        return json.dumps({"success": "true"})
 
-
-@app.route("/feedback/", methods=["POST"])
-@crossdomain(origin="*")
-def receive_feedback():
-    res = '{"success": "false"}'
-
-    data = json.loads(flask.request.data.decode("utf-8"))
-
-    if "id" not in data or "position" not in data or "flip" not in data:
-        logger.error("Missing form data, abort!")
-        return res
-
-    raw_id = data["id"]
-    position = json.loads(data["position"])
-    flip = data["flip"] == "true"
-    predictedFEN = data["predictedFEN"]
-    predictedPos = FEN2JSON(predictedFEN)
-    position = convertPosition(position)
-    board_filename = "x_" + raw_id + ".JPG"
-    board_filename = os.path.join(app.config["UPLOAD_FOLDER"], "boards/", board_filename)
-
-    if not os.path.isfile(board_filename):
-        return res
-
-    board = cv2.imread(board_filename, 0)
-    squares, names = extract_squares(board, flip=flip)
-
-    # Save each square using the 'position' dictionary from chessboard.js
-    for sq, name in zip(squares, names):
-        if name not in position:
-            label = "f"
-        else:
-            label = position[name]
-
-        if name not in predictedPos:
-            predictedLabel = "f"
-        else:
-            predictedLabel = predictedPos[name]
-
-        if predictedLabel == label:
-            continue
-
-        # Else, the prediction was incorrect, save it to learn from it later
-        fname = str(uuid.uuid4()) + ".JPG"
-        out_dir = os.path.join(app.config["UPLOAD_FOLDER"], "squares/", piece2dir[label])
-        outfile = os.path.join(out_dir, fname)
-        cv2.imwrite(outfile, sq)
-
-    # remove the board file
-    os.remove(board_filename)
-
-    return '{ "success": "true" }'
-
-
-@app.route("/ping/", methods=["GET"])
-@crossdomain(origin="*")
-def ping():
-    return '{{ "success": "true"}}'
-
-
-def load_models():
-    from chessvision.predict.classify_raw import load_board_extractor, load_classifier
-
-    sq_model = load_classifier()
-    board_model = load_board_extractor()
-
-    return board_model, sq_model
+    except Exception as e:
+        logger.exception("Error processing feedback")
+        return json.dumps({"success": "false", "error": str(e)}), 500
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--local", action="store_true")
+    parser.add_argument("--local", action="store_true", help="Run in local mode")
     args = parser.parse_args()
 
+    os.environ["LOCAL"] = "1" if args.local else "0"
     port = 7777 if args.local else 8080
-    board_model, sq_model = load_models()
+    cv_model = ChessVision(lazy_load=False)
 
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="127.0.0.1", port=port)
