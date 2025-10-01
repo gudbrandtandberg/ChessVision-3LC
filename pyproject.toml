@@ -10,7 +10,7 @@ authors = [
     {name = "Gudbrand Tandberg", email = "gudbrandduff@fmail.com"},
 ]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9,<3.13"
 license = {text = "MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -66,7 +66,6 @@ dev = [
 ultralytics = { git = "https://github.com/3lc-ai/ultralytics.git" }
 
 [tool.ruff]
-exclude = ["chessvision/pytorch_unet"]
 line-length = 120
 target-version = "py39"
 
