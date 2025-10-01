@@ -1,5 +1,6 @@
 **/__pycache__
 weights/
+!weights/.gitkeep
 .venv/
 .venv-dev/
 .env
