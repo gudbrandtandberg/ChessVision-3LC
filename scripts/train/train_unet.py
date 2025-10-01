@@ -241,14 +241,16 @@ def train_model(
         foreach=True,
     )
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "max", patience=3)  # goal: maximize Dice score
-    grad_scaler = torch.amp.GradScaler("cuda", enabled=amp)
+    grad_scaler = torch.amp.GradScaler("cuda", enabled=(amp and device.type == "cuda"))
     criterion = nn.BCEWithLogitsLoss()
     global_step = 0
     best_val_score = float("-inf")
     patience_counter = 0
 
     # Set model memory format
-    model = model.to(memory_format=torch.channels_last)  # type: ignore
+    use_channels_last = device.type in ["cuda", "cpu"]
+    if use_channels_last:
+        model = model.to(memory_format=torch.channels_last)  # type: ignore
 
     # Calculate validation interval based on epochs rather than steps
     total_steps = n_train // batch_size
@@ -298,7 +300,10 @@ def train_model(
                 )
 
                 # Ensure inputs match model's memory format
-                images = images.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
+                if use_channels_last:
+                    images = images.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
+                else:
+                    images = images.to(device=device, dtype=torch.float32)
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
 
                 with torch.autocast(device.type if device.type != "mps" else "cpu", enabled=amp):
