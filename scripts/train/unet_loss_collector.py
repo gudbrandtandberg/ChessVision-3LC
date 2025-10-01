@@ -23,6 +23,10 @@ class LossCollector(tlc.MetricsCollector):
         _, masks = batch["image"], batch["mask"]
         masks = masks.to(self.device)
 
+        use_channels_last = self.device.type in ["cuda", "cpu"]
+        if use_channels_last:
+            predictions = predictions.to(memory_format=torch.channels_last)
+
         unreduced_criterion = nn.BCEWithLogitsLoss(reduction="none")
 
         unreduced_dice_loss = dice_loss(
