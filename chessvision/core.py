@@ -86,7 +86,9 @@ class ChessVision:
         logger.info("Initializing board extraction model...")
         if self._board_extractor_model_id is None:
             self._board_extractor = UNet(n_channels=3, n_classes=1)
-            self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)  # type: ignore
+            use_channels_last = self.device.type in ["cuda", "cpu"]
+            if use_channels_last:
+                self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)  # type: ignore
             self._board_extractor = utils.load_model_checkpoint(
                 self._board_extractor,  # type: ignore
                 self._board_extractor_weights,
