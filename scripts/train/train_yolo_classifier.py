@@ -1,4 +1,5 @@
 import argparse
+import inspect
 import logging
 from pathlib import Path
 from typing import Any
@@ -15,8 +16,78 @@ from scripts.utils import setup_logger
 logger = logging.getLogger(__name__)
 
 
-def entropy(preds: torch.Tensor, batch: torch.Tensor) -> dict[str, torch.Tensor]:
-    return {"entropy": -torch.sum(preds * torch.log(preds), dim=1)}
+def calculate_entropy(probs: torch.Tensor) -> torch.Tensor:
+    """
+    Calculate entropy for classification probabilities.
+
+    Args:
+        probs: Probability tensor of shape [batch_size, num_classes]
+
+    Returns:
+        Entropy tensor of shape [batch_size]
+    """
+    # Add small epsilon to avoid log(0)
+    epsilon = 1e-10
+    entropy = -torch.sum(probs * torch.log(probs + epsilon), dim=1)
+    return entropy
+
+
+def create_entropy_logging_callbacks():
+    """
+    Create callbacks to log entropy metrics during validation.
+
+    This replaces the deprecated metrics_collection_function parameter.
+    Uses inspect to access validation predictions and logs aggregated entropy.
+    """
+    # Store entropy values for each validation batch
+    entropy_values = []
+
+    def on_val_batch_end(validator):
+        """Callback triggered at the end of each validation batch."""
+        try:
+            # Use inspect to access batch and predictions from the calling frame
+            frame = inspect.currentframe().f_back.f_back
+            local_vars = frame.f_locals
+
+            # Get predictions from the validator
+            preds = local_vars.get("preds")
+
+            if preds is not None and len(preds) > 0:
+                # For classification, preds should contain probability distributions
+                # Convert to tensor if needed
+                if not isinstance(preds, torch.Tensor):
+                    preds = torch.tensor(preds)
+
+                # Apply softmax if not already probabilities
+                if preds.dim() == 2:
+                    probs = torch.softmax(preds, dim=1)
+                else:
+                    probs = preds
+
+                # Calculate entropy for this batch
+                batch_entropy = calculate_entropy(probs)
+                entropy_values.extend(batch_entropy.cpu().tolist())
+
+        except Exception as e:
+            logger.debug(f"Could not calculate entropy for validation batch: {e}")
+
+    def on_fit_epoch_end(trainer):
+        """Callback triggered at the end of each epoch to log accumulated entropy."""
+        if entropy_values:
+            mean_entropy = sum(entropy_values) / len(entropy_values)
+
+            # Log to 3LC
+            tlc.log({
+                "val_mean_entropy": mean_entropy,
+                "epoch": trainer.epoch + 1,
+            })
+
+            logger.info(f"Epoch {trainer.epoch + 1} - Mean validation entropy: {mean_entropy:.4f}")
+
+            # Clear for next epoch
+            entropy_values.clear()
+
+    return on_val_batch_end, on_fit_epoch_end
 
 
 def train_model(
@@ -43,13 +114,17 @@ def train_model(
         exclude_zero_weight_collection=False,
         collection_epoch_start=1,
         collection_epoch_interval=collection_frequency,
-        metrics_collection_function=entropy,
     )
 
     tables = get_or_create_tables(
         train_table_name or config.INITIAL_TABLE_NAME,
         val_table_name or config.INITIAL_TABLE_NAME,
     )
+
+    # Add callbacks for entropy logging during validation
+    val_batch_callback, epoch_end_callback = create_entropy_logging_callbacks()
+    model.add_callback("on_val_batch_end", val_batch_callback)
+    model.add_callback("on_fit_epoch_end", epoch_end_callback)
 
     return model.train(
         tables=tables,
