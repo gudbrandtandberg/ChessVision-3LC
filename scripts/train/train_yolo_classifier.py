@@ -5,7 +5,7 @@ from typing import Any
 
 import tlc
 import torch
-from ultralytics.utils.tlc import TLCYOLO, Settings
+from tlc_ultralytics import YOLO, Settings
 
 from chessvision import constants
 from scripts.train import config
@@ -15,12 +15,29 @@ from scripts.utils import setup_logger
 logger = logging.getLogger(__name__)
 
 
-def entropy(preds: torch.Tensor, batch: torch.Tensor) -> dict[str, torch.Tensor]:
-    return {"entropy": -torch.sum(preds * torch.log(preds), dim=1)}
+def metrics_collection_function(preds: Any, batch: Any) -> dict[str, Any]:
+    # preds is already softmax-normalized for the classify task.
+    top2 = torch.topk(preds, k=2, dim=1).values
+    return {
+        "top2_margin": top2[:, 0] - top2[:, 1],
+        "entropy": -torch.sum(preds * torch.log(preds), dim=1),
+    }
+
+
+METRICS_SCHEMAS = {
+    "top2_margin": tlc.schemas.Float32Schema(
+        display_name="Top-2 Margin",
+        description="P(top-1) - P(top-2). Low values indicate the model is on the fence between two classes.",
+    ),
+    "entropy": tlc.schemas.Float32Schema(
+        display_name="Entropy",
+        description="Shannon entropy of the predicted class distribution.",
+    ),
+}
 
 
 def train_model(
-    model: TLCYOLO,
+    model: YOLO,
     *,
     epochs: int,
     batch_size: int,
@@ -43,7 +60,12 @@ def train_model(
         exclude_zero_weight_collection=False,
         collection_epoch_start=1,
         collection_epoch_interval=collection_frequency,
-        metrics_collection_function=entropy,
+        image_embeddings_reducer_args={
+            "retain_source_embedding_column": True,
+            "delete_source_tables": False,
+        },
+        metrics_collection_function=metrics_collection_function,
+        metrics_schemas=METRICS_SCHEMAS,
     )
 
     tables = get_or_create_tables(
@@ -87,7 +109,7 @@ if __name__ == "__main__":
     logger.info("Running ChessVision training...")
     logger.info(f"Arguments: {args}")
 
-    model = TLCYOLO(args.model)
+    model = YOLO(args.model)
 
     results = train_model(
         model=model,
@@ -108,6 +130,7 @@ if __name__ == "__main__":
         import shutil
 
         logger.info("Copying classifier checkpoint to %s", constants.BEST_YOLO_CLASSIFIER)
+        Path(constants.BEST_YOLO_CLASSIFIER).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(str(classifier_checkpoint), constants.BEST_YOLO_CLASSIFIER)
 
     if not args.skip_eval:

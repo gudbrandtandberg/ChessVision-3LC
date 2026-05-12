@@ -11,13 +11,13 @@ from chessvision.pytorch_unet.utils.dice_score import dice_loss
 from chessvision.utils import get_device
 
 
-class LossCollector(tlc.MetricsCollector):
+class LossCollector(tlc.metrics.MetricsCollector):
     def __init__(self) -> None:
         super().__init__()
         self.device = utils.get_device()
 
     def compute_metrics(
-        self, batch: dict[str, Any], predictor_output: tlc.PredictorOutput
+        self, batch: dict[str, Any], predictor_output: tlc.metrics.PredictorOutput
     ) -> dict[str, Any]:
         predictions = predictor_output.forward
         _, masks = batch["image"], batch["mask"]

@@ -26,7 +26,7 @@ run_names = get_run_names("c:/Users/gudbrand/AppData/Local/3LC/3LC/projects/ches
 def collect_sweep_data(run_names: list[str]) -> dict[str, list[float]]:
     data = defaultdict(list)
     for run_name in run_names:
-        run = tlc.Run.from_url(tlc.Url.create_run_url(run_name, project_name))
+        run = tlc.Run.from_names(project_name=project_name, run_name=run_name)
         parameters = run.constants["parameters"]
         data["Learning Rate"].append(parameters["learning_rate"])
         data["Sample Weights"].append(float(parameters["use_sample_weights"]))

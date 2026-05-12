@@ -113,7 +113,7 @@ class ChessVision:
         if self._classifier_model_id is None:
             try:
                 self._classifier = utils.load_yolo_classification_model(
-                    self._classifier_weights or constants.BEST_YOLO_CLASSIFIER
+                    self._classifier_weights or constants.BEST_YOLO_CLASSIFIER,
                 )
                 self._classifier_model_id = "yolo"  # Mark as using YOLO
                 self._classifier_weights = self._classifier_weights or constants.BEST_YOLO_CLASSIFIER
@@ -131,7 +131,7 @@ class ChessVision:
         # If YOLO explicitly requested, try loading it or fail
         elif self._classifier_model_id == "yolo":
             self._classifier = utils.load_yolo_classification_model(
-                self._classifier_weights or constants.BEST_YOLO_CLASSIFIER
+                self._classifier_weights or constants.BEST_YOLO_CLASSIFIER,
             )
             self._classifier_weights = self._classifier_weights or constants.BEST_YOLO_CLASSIFIER
             logger.info(f"Loaded YOLO model from {self._classifier_weights}")
@@ -328,7 +328,7 @@ class ChessVision:
 
         # Create initial board
         board = chess.BaseBoard(board_fen=None)
-        for pred_label, sq in zip(pred_labels, square_names):
+        for pred_label, sq in zip(pred_labels, square_names, strict=False):
             piece = None if pred_label == "f" else chess.Piece.from_symbol(pred_label)
             square = chess.SQUARE_NAMES.index(sq)
             board.set_piece_at(square, piece, promoted=False)
@@ -340,7 +340,7 @@ class ChessVision:
 
         # Create final board with validated position
         board = chess.BaseBoard(board_fen=None)
-        for pred_label, sq in zip(validated_labels, square_names):
+        for pred_label, sq in zip(validated_labels, square_names, strict=False):
             piece = None if pred_label == "f" else chess.Piece.from_symbol(pred_label)
             square = chess.SQUARE_NAMES.index(sq)
             board.set_piece_at(square, piece, promoted=False)
@@ -451,7 +451,7 @@ class ChessVision:
         argsorted_probs = np.argsort(probabilities)
 
         # Rule 1: No pawns on first/last rank
-        for i, (label, name) in enumerate(zip(pred_labels, square_names)):
+        for i, (label, name) in enumerate(zip(pred_labels, square_names, strict=False)):
             if name in constants.INVALID_PAWN_SQUARES and label in ["P", "p"]:
                 # Find next best non-pawn prediction
                 for alt_idx in argsorted_probs[i][::-1]:

@@ -208,11 +208,11 @@ def train_model(
 
     # Set up metrics collection
     metrics_collectors = [
-        tlc.ClassificationMetricsCollector(classes=constants.LABEL_NAMES),
-        tlc.EmbeddingsMetricsCollector(layers=[HIDDEN_LAYER_INDEX]),
+        tlc.metrics.ClassificationMetricsCollector(classes=constants.LABEL_NAMES),
+        tlc.metrics.EmbeddingsMetricsCollector(layers=[HIDDEN_LAYER_INDEX]),
     ]
 
-    predictor = tlc.Predictor(model, layers=[HIDDEN_LAYER_INDEX])
+    predictor = tlc.metrics.Predictor(model, layers=[HIDDEN_LAYER_INDEX])
 
     # Set up training
     early_stopping = EarlyStopping(patience=patience, verbose=True)
@@ -278,7 +278,6 @@ def train_model(
                 split="val",
                 constants={"epoch": epoch},
                 dataloader_args={"batch_size": 512},
-                exclude_zero_weights=True,
                 collect_aggregates=False,
             )
 
@@ -289,7 +288,6 @@ def train_model(
                 split="train",
                 constants={"epoch": epoch},
                 dataloader_args={"batch_size": 512},
-                exclude_zero_weights=True,
                 collect_aggregates=False,
             )
 

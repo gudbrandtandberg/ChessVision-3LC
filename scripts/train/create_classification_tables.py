@@ -28,17 +28,17 @@ def create_tables() -> dict[str, tlc.Table]:
     logger.info(f"Found {len(train_dataset)} training images")
     logger.info(f"Found {len(val_dataset)} validation images")
 
-    # Define table structure
-    sample_structure = (
-        tlc.PILImage("image"),
-        tlc.CategoricalLabel("label", classes=constants.LABEL_NAMES),
-    )
+    # Define table schema
+    sample_schema = {
+        "image": tlc.schemas.ImageSchema(),
+        "label": tlc.schemas.CategoricalLabelSchema(classes=constants.LABEL_NAMES),
+    }
 
     # Create tables
     tables = {}
     tables["train"] = tlc.Table.from_torch_dataset(
         dataset=train_dataset,
-        structure=sample_structure,
+        schema=sample_schema,
         table_name=config.INITIAL_TABLE_NAME,
         dataset_name=config.PIECE_CLASSIFICATION_DATASETS["train"],
         project_name=config.PIECE_CLASSIFICATION_PROJECT,
@@ -46,7 +46,7 @@ def create_tables() -> dict[str, tlc.Table]:
 
     tables["val"] = tlc.Table.from_torch_dataset(
         dataset=val_dataset,
-        structure=sample_structure,
+        schema=sample_schema,
         table_name=config.INITIAL_TABLE_NAME,
         dataset_name=config.PIECE_CLASSIFICATION_DATASETS["val"],
         project_name=config.PIECE_CLASSIFICATION_PROJECT,

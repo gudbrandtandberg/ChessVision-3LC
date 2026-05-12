@@ -1,13 +1,13 @@
 from pathlib import Path
 
 import tlc
-from ultralytics.utils.tlc import TLCYOLO, Settings
+from tlc_ultralytics import YOLO, Settings
 
 # First time, use this data
 # data="data/board_extraction/yolo/data.yaml",
 
 if __name__ == "__main__":
-    model = TLCYOLO("yolo11s-seg.pt")
+    model = YOLO("yolo11s-seg.pt")
 
     settings = Settings(
         project_name="chessvision-yolo-segmentation",
@@ -20,8 +20,12 @@ if __name__ == "__main__":
     )
     results = model.train(
         tables={
-            "train": tlc.Url.create_table_url("initial", "train", "chessvision-yolo-segmentation"),
-            "val": tlc.Url.create_table_url("initial", "val", "chessvision-yolo-segmentation"),
+            "train": tlc.helpers.ProjectLayout.table_url(
+                project_name="chessvision-yolo-segmentation", dataset_name="train", table_name="initial"
+            ),
+            "val": tlc.helpers.ProjectLayout.table_url(
+                project_name="chessvision-yolo-segmentation", dataset_name="val", table_name="initial"
+            ),
         },
         settings=settings,
         batch=4,

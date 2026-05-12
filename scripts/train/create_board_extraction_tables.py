@@ -49,12 +49,9 @@ def create_tables() -> dict[str, tlc.Table]:
 
     logger.info(f"Split into {n_train} training and {n_val} validation images")
 
-    sample_structure = {
-        "image": tlc.PILImage("image"),
-        "mask": tlc.SegmentationPILImage(
-            "mask",
-            classes=constants.SEGMENTATION_MAP,
-        ),
+    sample_schema = {
+        "image": tlc.schemas.ImageSchema(),
+        "mask": tlc.schemas.SemanticSegmentationSchema(classes=constants.SEGMENTATION_MAP),
     }
 
     tables = {}
@@ -62,7 +59,7 @@ def create_tables() -> dict[str, tlc.Table]:
         dataset=train_set,
         dataset_name=config.BOARD_EXTRACTION_DATASETS["train"],
         table_name="initial",
-        structure=sample_structure,
+        schema=sample_schema,
         project_name=config.BOARD_EXTRACTION_PROJECT,
         if_exists="reuse",
     )
@@ -71,7 +68,7 @@ def create_tables() -> dict[str, tlc.Table]:
         dataset=val_set,
         dataset_name=config.BOARD_EXTRACTION_DATASETS["val"],
         table_name="initial",
-        structure=sample_structure,
+        schema=sample_schema,
         project_name=config.BOARD_EXTRACTION_PROJECT,
         if_exists="reuse",
     )

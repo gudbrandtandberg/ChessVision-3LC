@@ -1,7 +1,6 @@
 """Type definitions for ChessVision."""
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -23,8 +22,8 @@ class BoardExtractionResult:
 
     probabilities: NDArray[np.float32]
     binary_mask: NDArray[np.uint8]  # Thresholded mask
-    quadrangle: Optional[NDArray[np.float32]]  # The detected quadrangle, or None if no board found
-    board_image: Optional[NDArray[np.uint8]]  # The extracted board image, or None if no board found
+    quadrangle: NDArray[np.float32] | None  # The detected quadrangle, or None if no board found
+    board_image: NDArray[np.uint8] | None  # The extracted board image, or None if no board found
 
 
 @dataclass
@@ -44,7 +43,7 @@ class ChessVisionResult:
     """Complete results from image processing."""
 
     board_extraction: BoardExtractionResult
-    position: Optional[PositionResult]  # None if board extraction failed
+    position: PositionResult | None  # None if board extraction failed
     processing_time: float  # Total processing time in seconds
 
 

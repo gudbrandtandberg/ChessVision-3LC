@@ -164,7 +164,7 @@ def create_tlc_table(
         project_name=project_name,
         if_exists="overwrite",
         extra_columns={
-            "mask": tlc.SegmentationPILImage("mask", classes=constants.SEGMENTATION_MAP),
+            "mask": tlc.schemas.SemanticSegmentationSchema(classes=constants.SEGMENTATION_MAP),
         },
     )
 
@@ -223,7 +223,7 @@ def enrich_tlc_table(
     # Define metrics collector
     def custom_metrics_collector(
         batch: list[torch.Tensor],
-        predictor_output: tlc.PredictorOutput,
+        predictor_output: tlc.metrics.PredictorOutput,
     ) -> dict[str, list[Any]]:
         """Extract boards and collect metrics from batch of images."""
         logits = predictor_output.forward
@@ -313,34 +313,31 @@ def enrich_tlc_table(
 
     # Define collector schemas
     custom_metrics_collector_schemas = {
-        "confidence": tlc.Float("confidence"),
-        "quad_score": tlc.Float("quad_score"),
-        "completeness": tlc.Float("completeness"),
-        "distribution": tlc.Float("distribution"),
-        "extracted": tlc.PILImage("extracted"),
-        "probs": tlc.PILImage("probs"),
-        "predicted_mask": tlc.SegmentationPILImage(
-            "predicted_mask",
-            classes=constants.SEGMENTATION_MAP,
-        ),
-        "board": tlc.PILImage("board"),
+        "confidence": tlc.schemas.Float32Schema(),
+        "quad_score": tlc.schemas.Float32Schema(),
+        "completeness": tlc.schemas.Float32Schema(),
+        "distribution": tlc.schemas.Float32Schema(),
+        "extracted": tlc.schemas.ImageSchema(),
+        "probs": tlc.schemas.ImageSchema(),
+        "predicted_mask": tlc.schemas.SemanticSegmentationSchema(classes=constants.SEGMENTATION_MAP),
+        "board": tlc.schemas.ImageSchema(),
     }
 
     # Collect metrics
     print("Collecting metrics and extracting boards")
-    embedding_collector = tlc.EmbeddingsMetricsCollector([embedding_layer])
+    embedding_collector = tlc.metrics.EmbeddingsMetricsCollector([embedding_layer])
 
     tlc.collect_metrics(
         table,
         [
-            tlc.FunctionalMetricsCollector(
+            tlc.metrics.FunctionalMetricsCollector(
                 custom_metrics_collector,
                 column_schemas=custom_metrics_collector_schemas,
                 compute_aggregates=False,
             ),
             embedding_collector,
         ],
-        tlc.Predictor(
+        predictor=tlc.metrics.Predictor(
             chess_vision.board_extractor,
             layers=[embedding_layer],
             preprocess_fn=v2.Resize((256, 256), antialias=True),

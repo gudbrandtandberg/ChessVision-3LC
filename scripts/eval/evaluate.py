@@ -4,7 +4,6 @@ import argparse
 import logging
 import time
 from collections.abc import Generator, Sequence
-from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -250,119 +249,99 @@ def evaluate_model(
         metrics_writer = tlc.MetricsTableWriter(
             run_url=run.url,
             foreign_table_url=test_table.url,
-            column_schemas={
-                "true_labels": tlc.Schema(
-                    value=tlc.Int32Value(
-                        value_min=0,
-                        value_max=12,
-                        number_role=tlc.NUMBER_ROLE_LABEL,
-                        value_map=tlc.MapElement._construct_value_map(constants.LABEL_NAMES),
-                    ),
-                    writable=True,
-                ),
-                "predicted_labels": tlc.Schema(
-                    value=tlc.Int32Value(
-                        value_min=0,
-                        value_max=12,
-                        number_role=tlc.NUMBER_ROLE_LABEL,
-                        value_map=tlc.MapElement._construct_value_map(constants.LABEL_NAMES),
-                    ),
-                ),
-                "validated_labels": tlc.CategoricalLabel("validated_labels", constants.LABEL_NAMES),
-                "rendered_board_original": tlc.Schema(value=tlc.ImageUrlStringValue("rendered_board_original")),
-                "rendered_board_validated": tlc.Schema(value=tlc.ImageUrlStringValue("rendered_board_validated")),
-                "extracted_board": tlc.Schema(value=tlc.ImageUrlStringValue("extracted_board")),
-                "predicted_masks": tlc.Schema(value=tlc.ImageUrlStringValue("predicted_masks")),
+            schema={
+                "true_labels": tlc.schemas.CategoricalLabelSchema(classes=constants.LABEL_NAMES, writable=True),
+                "predicted_labels": tlc.schemas.CategoricalLabelSchema(classes=constants.LABEL_NAMES),
+                "validated_labels": tlc.schemas.CategoricalLabelSchema(classes=constants.LABEL_NAMES),
+                "rendered_board_original": tlc.schemas.ImageUrlSchema(),
+                "rendered_board_validated": tlc.schemas.ImageUrlSchema(),
+                "extracted_board": tlc.schemas.ImageUrlSchema(),
+                "predicted_masks": tlc.schemas.ImageUrlSchema(),
             },
         )
 
     # Main evaluation loop
-    context_manager = (
-        tlc.bulk_data_url_context(run.bulk_data_url, metrics_writer.url) if metrics_writer else nullcontext()
-    )
+    for index, (img, filename, true_fen) in tqdm(
+        enumerate(get_test_generator(test_table)),
+        total=test_set_size,
+        desc="Evaluating images",
+    ):
+        # Process image
+        result = cv.process_image(img)
+        times.append(result.processing_time)
 
-    with context_manager:
-        for index, (img, filename, true_fen) in tqdm(
-            enumerate(get_test_generator(test_table)),
-            total=test_set_size,
-            desc="Evaluating images",
-        ):
-            # Process image
-            result = cv.process_image(img)
-            times.append(result.processing_time)
+        # Handle extraction failure
+        if result.position is None:
+            extraction_failures += 1
+            if metrics_writer:
+                mask_url = save_predicted_mask(run, filename, result.board_extraction.binary_mask)
 
-            # Handle extraction failure
-            if result.position is None:
-                extraction_failures += 1
-                if metrics_writer:
-                    mask_url = save_predicted_mask(run, filename, result.board_extraction.binary_mask)
+                metrics_batch = {
+                    "predicted_masks": [str(mask_url)],
+                    "extracted_board": [str(constants.BLACK_BOARD_PATH)],
+                    "rendered_board_original": [""],
+                    "rendered_board_validated": [""],
+                    "example_id": [index],
+                    "is_failed": [True],
+                    "top_1_accuracy": [0.0],
+                    "top_1_accuracy_validated": [0.0],
+                    "top_2_accuracy": [0.0],
+                    "top_3_accuracy": [0.0],
+                    "num_fixes": [0],
+                    "square_crop": [Image.open(constants.BLACK_SQUARE_PATH)],
+                    "true_labels": [0],
+                    "predicted_labels": [0],
+                    "validated_labels": [0],
+                }
+                metrics_writer.add_batch(metrics_batch)
+            continue
 
-                    metrics_batch = {
-                        "predicted_masks": [str(mask_url)],
-                        "extracted_board": [str(constants.BLACK_BOARD_PATH)],
-                        "rendered_board_original": [""],
-                        "rendered_board_validated": [""],
-                        "example_id": [index],
-                        "is_failed": [True],
-                        "top_1_accuracy": [0.0],
-                        "top_1_accuracy_validated": [0.0],
-                        "top_2_accuracy": [0.0],
-                        "top_3_accuracy": [0.0],
-                        "num_fixes": [0],
-                        "square_crop": [Image.open(constants.BLACK_SQUARE_PATH)],
-                        "true_labels": [0],
-                        "predicted_labels": [0],
-                        "validated_labels": [0],
-                    }
-                    metrics_writer.add_batch(metrics_batch)
-                continue
+        # Process successful extraction
+        assert result.board_extraction.board_image is not None
 
-            # Process successful extraction
-            assert result.board_extraction.board_image is not None
+        # Compute all metrics
+        original_accuracy = compute_position_accuracy(result.position.original_fen, true_fen)
+        validated_accuracy = compute_position_accuracy(result.position.fen, true_fen)
+        topk_acc = compute_model_topk_accuracy(result.position.model_probabilities, true_fen)
+        pred_indices, true_indices = get_label_indices(result.position.model_probabilities, true_fen)
+        validated_indices = get_validated_indices(result.position.fen)
 
-            # Compute all metrics
-            original_accuracy = compute_position_accuracy(result.position.original_fen, true_fen)
-            validated_accuracy = compute_position_accuracy(result.position.fen, true_fen)
-            topk_acc = compute_model_topk_accuracy(result.position.model_probabilities, true_fen)
+        # Update running totals
+        total_original_accuracy += original_accuracy.accuracy
+        total_validated_accuracy += validated_accuracy.accuracy
+        total_top2_accuracy += topk_acc.top_2
+        total_top3_accuracy += topk_acc.top_3
+        if validated_accuracy.accuracy > original_accuracy.accuracy:
+            validation_improvements += 1
+        validation_fixes += len(result.position.validation_fixes)
+
+        # Add detailed metrics only if requested
+        if metrics_writer:
+            mask_url = save_predicted_mask(run, filename, result.board_extraction.binary_mask)
+            board_url = save_extracted_board(run, filename, result.board_extraction.board_image)
+            original_svg_url = save_predicted_board(run, filename, result.position.original_fen, suffix="original")
+            validated_svg_url = save_predicted_board(run, filename, result.position.fen, suffix="validated")
             pred_indices, true_indices = get_label_indices(result.position.model_probabilities, true_fen)
             validated_indices = get_validated_indices(result.position.fen)
 
-            # Update running totals
-            total_original_accuracy += original_accuracy.accuracy
-            total_validated_accuracy += validated_accuracy.accuracy
-            total_top2_accuracy += topk_acc.top_2
-            total_top3_accuracy += topk_acc.top_3
-            if validated_accuracy.accuracy > original_accuracy.accuracy:
-                validation_improvements += 1
-            validation_fixes += len(result.position.validation_fixes)
-
-            # Add detailed metrics only if requested
-            if metrics_writer:
-                mask_url = save_predicted_mask(run, filename, result.board_extraction.binary_mask)
-                board_url = save_extracted_board(run, filename, result.board_extraction.board_image)
-                original_svg_url = save_predicted_board(run, filename, result.position.original_fen, suffix="original")
-                validated_svg_url = save_predicted_board(run, filename, result.position.fen, suffix="validated")
-                pred_indices, true_indices = get_label_indices(result.position.model_probabilities, true_fen)
-                validated_indices = get_validated_indices(result.position.fen)
-
-                metrics_batch = {
-                    "predicted_masks": [str(mask_url)] * 64,
-                    "extracted_board": [str(board_url)] * 64,
-                    "rendered_board_original": [str(original_svg_url)] * 64,
-                    "rendered_board_validated": [str(validated_svg_url)] * 64,
-                    "top_1_accuracy_validated": [validated_accuracy.accuracy] * 64,
-                    "top_1_accuracy": [original_accuracy.accuracy] * 64,
-                    "top_2_accuracy": [topk_acc.top_2] * 64,
-                    "top_3_accuracy": [topk_acc.top_3] * 64,
-                    "num_fixes": [len(result.position.validation_fixes)] * 64,
-                    "square_crop": [Image.fromarray(img.squeeze()) for img in result.position.squares],
-                    "example_id": [index] * 64,
-                    "is_failed": [False] * 64,
-                    "true_labels": true_indices,
-                    "predicted_labels": pred_indices,
-                    "validated_labels": validated_indices,
-                }
-                metrics_writer.add_batch(metrics_batch)
+            metrics_batch = {
+                "predicted_masks": [str(mask_url)] * 64,
+                "extracted_board": [str(board_url)] * 64,
+                "rendered_board_original": [str(original_svg_url)] * 64,
+                "rendered_board_validated": [str(validated_svg_url)] * 64,
+                "top_1_accuracy_validated": [validated_accuracy.accuracy] * 64,
+                "top_1_accuracy": [original_accuracy.accuracy] * 64,
+                "top_2_accuracy": [topk_acc.top_2] * 64,
+                "top_3_accuracy": [topk_acc.top_3] * 64,
+                "num_fixes": [len(result.position.validation_fixes)] * 64,
+                "square_crop": [Image.fromarray(img.squeeze()) for img in result.position.squares],
+                "example_id": [index] * 64,
+                "is_failed": [False] * 64,
+                "true_labels": true_indices,
+                "predicted_labels": pred_indices,
+                "validated_labels": validated_indices,
+            }
+            metrics_writer.add_batch(metrics_batch)
 
     # Compute final metrics
     successful_evaluations = test_set_size - extraction_failures
@@ -383,10 +362,9 @@ def evaluate_model(
     # Finalize run
     run.set_parameters({"test_results": aggregate_data, "threshold": threshold})
 
-    # Only add metrics table if requested
+    # Only add metrics table if requested. finalize() auto-updates the run in 3.x.
     if metrics_writer:
-        metrics_table = metrics_writer.finalize()
-        run.add_metrics_table(metrics_table)
+        metrics_writer.finalize()
 
     run.set_status_completed()
     return run

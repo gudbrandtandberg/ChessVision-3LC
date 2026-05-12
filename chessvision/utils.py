@@ -194,15 +194,13 @@ def load_yolo_segmentation_model(model_weights: str) -> torch.nn.Module:
         model_weights: Path to YOLO model weights
     """
     try:
-        # from ultralytics.utils.tlc import TLCYOLO as YOLO
-        from ultralytics import YOLO
+        from tlc_ultralytics import YOLO
     except ImportError:
         try:
             from ultralytics import YOLO
-        except ImportError:
-            raise ImportError(
-                "YOLO model requires ultralytics package. Please install with 'pip install git+https://github.com/3lc-ai/ultralytics.git'."
-            )
+        except ImportError as err:
+            msg = "YOLO model requires the 3lc-ultralytics or ultralytics package."
+            raise ImportError(msg) from err
 
     class SEGYOLOModelWrapper:
         def __init__(self, model: YOLO):
@@ -244,7 +242,7 @@ def load_yolo_classification_model(model_weights: str) -> torch.nn.Module:
         ImportError: If ultralytics is not installed
     """
     try:
-        from ultralytics.utils.tlc import TLCYOLO as YOLO
+        from tlc_ultralytics import YOLO
     except ImportError:
         try:
             from ultralytics import YOLO
@@ -252,7 +250,7 @@ def load_yolo_classification_model(model_weights: str) -> torch.nn.Module:
             logger.warning("Using ultralytics (no 3lc integration) package")
         except ImportError:
             logger.warning(
-                "YOLO model requires ultralytics package. Please install with 'pip install git+https://github.com/3lc-ai/ultralytics.git'.",
+                "YOLO model requires the 3lc-ultralytics or ultralytics package.",
             )
             raise
 

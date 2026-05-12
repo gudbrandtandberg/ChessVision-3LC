@@ -98,7 +98,7 @@ class PrepareModelOutputsForLogging:
     def __call__(
         self,
         batch: dict[str, Any],
-        predictor_output: tlc.PredictorOutput,
+        predictor_output: tlc.metrics.PredictorOutput,
     ) -> tuple[dict[str, Any], torch.Tensor]:
         predictions_tensor = predictor_output.forward
 
@@ -205,18 +205,18 @@ def train_model(
     )
 
     # Set up metrics collection
-    predictor = tlc.Predictor(
+    predictor = tlc.metrics.Predictor(
         model=model,
         layers=[52],
     )
 
     metrics_collectors = [
         LossCollector(),
-        tlc.SegmentationMetricsCollector(
+        tlc.metrics.SegmentationMetricsCollector(
             label_map=constants.SEGMENTATION_MAP,
             preprocess_fn=PrepareModelOutputsForLogging(threshold=threshold),
         ),
-        tlc.EmbeddingsMetricsCollector(layers=[52]),
+        tlc.metrics.EmbeddingsMetricsCollector(layers=[52]),
     ]
 
     logger.info(
