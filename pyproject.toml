@@ -7,7 +7,7 @@ name = "chessvision"
 version = "0.1.0"
 description = "Classification of pieces and segmentation of boards in chess images"
 authors = [
-    {name = "Gudbrand Tandberg", email = "gudbrandduff@fmail.com"},
+    {name = "Gudbrand Tandberg", email = "gudbrandduff@gmail.com"},
 ]
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -35,13 +35,10 @@ dependencies = [
     "tqdm",
     "flask>=3.1.0",
     "3lc-ultralytics",
-    "3lc",
+    "3lc[pacmap]>=3.0",
 ]
 
 [project.optional-dependencies]
-tlc = [
-    "pacmap>=0.8.0",
-]
 viz = [
     "plotly>=6.0.0",
 ]
@@ -61,8 +58,16 @@ dev = [
 ]
 
 [tool.uv.sources]
-"3lc-ultralytics" = { path = "../3lc-ultralytics", editable = true }
-"3lc" = { path = "../tlc-monorepo", editable = true }
+"3lc" = { index = "3lc" }
+
+# Uncomment to use local installs if available
+# "3lc-ultralytics" = { path = "../3lc-ultralytics", editable = true }
+# "3lc" = { path = "../tlc-monorepo", editable = true }
+
+[[tool.uv.index]]
+name = "3lc"
+url = "https://pypi.3lc.ai/public/repositories/releases-public"
+explicit = true
 
 [tool.ruff]
 line-length = 120
