@@ -73,9 +73,16 @@ These pull in mostly the same direction: better data work → better model → b
 - [x] **Baseline + compare**: `benchmarks/baseline.json` (committed) + `scripts/eval/compare.py`
       which runs eval and diffs vs baseline, gating on accuracy regressions. (C-4)
       Initial set: top-1 0.982 / validated 0.983 / 0 extraction failures.
-- [ ] **Audit other scripts for tlc 3.0→3.1 API skew.** Found & fixed `._tlc_url` → `table_rows`
-      in `evaluate.py` (code targets 3.0, we run monorepo 3.1). `train/*`, `process_new_raw/*`,
-      `merge_new_raw/*` likely have similar breaks — run each and fix.
+- [~] **Audit scripts for tlc 3.0→3.1 API skew** (we run monorepo 3.1; public release is 3.0,
+      so fixes are version-compat shims, not hard switches):
+      - [x] `evaluate.py`: `._tlc_url` → `table.table_rows`.
+      - [x] `train/config.py`: `tlc.register_url_alias` → `tlc.url.*`; `tlc.Configuration` →
+            `tlc.config` (both shimmed). This was blocking *all* training imports.
+      - [x] `create_classification_tables.py` / `create_board_extraction_tables.py`: build
+            clean on 3.1 (verified locally — 8931/2134 and 568/63 rows).
+      - [x] YOLO train scripts import-clean (`tlc.active_run/schemas/helpers` all present in 3.1).
+      - [ ] Remaining (need GPU/S3 to exercise): training run loops, `process_new_raw/*`,
+            `merge_new_raw/*`, and the UNet/timm trainers (lower priority — YOLO-only).
 - [ ] **Decouple metrics tests from tlc**: move pure functions (`board_to_labels`,
       `compute_model_topk_accuracy`, …) out of `scripts/eval/evaluate.py` into a tlc-free
       module so `test_metrics.py` collects offline. (C-2)
