@@ -9,6 +9,7 @@ from typing import Any
 import tlc
 import torch
 import torch.nn as nn
+from tlc.integration.torch import create_sampler
 from torch import optim
 from torch.utils.data import DataLoader
 from torchvision.transforms import ColorJitter, GaussianBlur, Resize, ToTensor
@@ -170,11 +171,13 @@ def train_model(
     val_table = tables["val"]
 
     if augment:
-        train_table.map(AugmentImages()).map_collect_metrics(TransformSampleToModel())
+        train_view = train_table.with_transform(AugmentImages())
+        train_metrics_view = train_table.with_transform(TransformSampleToModel())
     else:
-        train_table.map(TransformSampleToModel())
+        train_view = train_table.with_transform(TransformSampleToModel())
+        train_metrics_view = train_view
 
-    val_table.map(TransformSampleToModel())
+    val_view = val_table.with_transform(TransformSampleToModel())
 
     n_train = len(train_table)
     n_val = len(val_table)
@@ -184,9 +187,9 @@ def train_model(
 
     # Create data loaders
     train_loader = DataLoader(
-        train_table,
+        train_view,
         shuffle=not use_sample_weights,
-        sampler=train_table.create_sampler() if use_sample_weights else None,
+        sampler=create_sampler(train_table) if use_sample_weights else None,
         batch_size=batch_size,
         num_workers=4,
         pin_memory=True,
@@ -195,7 +198,7 @@ def train_model(
         generator=g,
     )
     val_loader = DataLoader(
-        val_table,
+        val_view,
         shuffle=False,
         drop_last=True,
         batch_size=batch_size,
@@ -367,7 +370,7 @@ def train_model(
         # Collect per-sample metrics using tlc every 5 epochs
         if epoch in collection_epochs:
             tlc.collect_metrics(
-                train_table,
+                train_metrics_view,
                 metrics_collectors=metrics_collectors,
                 predictor=predictor,
                 split="train",
@@ -375,7 +378,7 @@ def train_model(
                 dataloader_args={"batch_size": 4},
             )
             tlc.collect_metrics(
-                val_table,
+                val_view,
                 metrics_collectors=metrics_collectors,
                 predictor=predictor,
                 split="val",

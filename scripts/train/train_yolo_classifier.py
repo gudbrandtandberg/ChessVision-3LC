@@ -138,9 +138,12 @@ if __name__ == "__main__":
 
         logger.info("Running tests with trained model...")
 
+        test_table_name = "2024-11-04-2024-11-04"
         evaluate_model(
             run=tlc.active_run(),
             classifier_weights=str(classifier_checkpoint),
             classifier_model_id="yolo",
-            table_name="merged-2024-11-04-2024-11-04",
+            board_extractor_weights=constants.BEST_EXTRACTOR_WEIGHTS,
+            table_name=test_table_name,
+            image_folder=constants.DATA_ROOT / "test" / test_table_name / "raw",
         )

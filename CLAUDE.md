@@ -60,3 +60,18 @@ ruff check chessvision/
 - Python ≥3.10, ruff (line length 120) + mypy configured in `pyproject.toml`.
 - `chessvision/pytorch_unet/` is a submodule (third-party) — excluded from lint/type/cov.
 - Keep `tlc` usage out of the core `chessvision/` package; it belongs in `scripts/`.
+
+## Running on the godfire GPU node (Linux, RTX 4080)
+
+This node piggybacks on the parent uv workspace at `/home/gubbis/projects/`, which holds the
+`3lc-ultralytics` and `tlc-monorepo` editable sources.
+
+- **Do NOT `uv sync` inside this dir** — `pyproject.toml` path-deps to `../3lc-ultralytics` /
+  `../tlc-monorepo` collide with the parent workspace ("Nested workspaces are not supported").
+- Use the parent venv python directly: `/home/gubbis/projects/.venv/bin/python`. `chessvision`
+  is installed editable there via `VIRTUAL_ENV=/home/gubbis/projects/.venv uv pip install -e . --no-deps`.
+- TLC env (`TLC_API_KEY=1`, `TLC_DISABLE_ACCOUNT_SERVICE=1`) comes from the parent `.envrc`
+  (direnv `source_up`); no `3lc login` needed. tlc runs from `../tlc-monorepo` source.
+- 3LC writes runs/tables under `/home/gubbis/.local/share/3LC/projects/`.
+- The `scripts/bin/*.sh` wrappers use `uv run`, which fails here — call the venv python directly.
+- Init the UNet submodule once: `git submodule update --init`.

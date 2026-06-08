@@ -30,7 +30,7 @@ def _project_root_url() -> str:
 # Project names
 BOARD_EXTRACTION_PROJECT = "chessvision-segmentation"
 PIECE_CLASSIFICATION_PROJECT = "chessvision-classification"
-YOLO_CLASSIFICATION_PROJECT = "chessvision-yolo-classification"
+YOLO_CLASSIFICATION_PROJECT = "chessvision-classification"
 
 # Dataset paths
 BOARD_EXTRACTION_ROOT = constants.DATA_ROOT / "board_extraction"
