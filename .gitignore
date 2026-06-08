@@ -1,5 +1,7 @@
 **/__pycache__
-weights/
+weights/*
+!weights/best_yolo_classifier.pt
+!weights/best_yolo_extractor.pt
 .venv/
 .venv-dev/
 .env
