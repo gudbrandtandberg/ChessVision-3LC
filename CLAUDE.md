@@ -63,15 +63,31 @@ ruff check chessvision/
 
 ## Running on the godfire GPU node (Linux, RTX 4080)
 
-This node piggybacks on the parent uv workspace at `/home/gubbis/projects/`, which holds the
-`3lc-ultralytics` and `tlc-monorepo` editable sources.
+The project uses its **own standalone `.venv`** here (the earlier idea of a shared parent uv
+workspace at `/home/gubbis/projects/` was abandoned — don't use its venv).
 
-- **Do NOT `uv sync` inside this dir** — `pyproject.toml` path-deps to `../3lc-ultralytics` /
-  `../tlc-monorepo` collide with the parent workspace ("Nested workspaces are not supported").
-- Use the parent venv python directly: `/home/gubbis/projects/.venv/bin/python`. `chessvision`
-  is installed editable there via `VIRTUAL_ENV=/home/gubbis/projects/.venv uv pip install -e . --no-deps`.
-- TLC env (`TLC_API_KEY=1`, `TLC_DISABLE_ACCOUNT_SERVICE=1`) comes from the parent `.envrc`
-  (direnv `source_up`); no `3lc login` needed. tlc runs from `../tlc-monorepo` source.
+One-time setup:
+```bash
+cd ~/projects/ChessVision-3LC
+uv venv                                                  # fresh .venv in the project
+uv sync --all-extras                                     # public deps (3lc 3.0 wheel, ultralytics, ...)
+uv pip install -e ../tlc-monorepo -e ../3lc-ultralytics  # editable source overlay (tlc 3.1)
+git submodule update --init                              # UNet submodule (only for the UNet path)
+```
+The editable source overlay matters: the frozen `3lc` wheel ignores `TLC_DISABLE_ACCOUNT_SERVICE`
+and 403s, but the source honors it — so a throwaway key works.
+
+Running things:
+```bash
+export TLC_API_KEY=1 TLC_DISABLE_ACCOUNT_SERVICE=1       # also in the parent .envrc (direnv)
+.venv/bin/python scripts/train/train_yolo_classifier.py --model yolov8n-cls.pt --epochs 40 \
+    --train-table-name initial --val-table-name initial --skip-eval --run-name "..."
+.venv/bin/python scripts/train/prepare_yolo_segmentation_dataset.py   # build YOLO-seg dataset
+.venv/bin/python scripts/eval/compare.py                 # end-to-end eval vs benchmarks/baseline.json
+```
+
 - 3LC writes runs/tables under `/home/gubbis/.local/share/3LC/projects/`.
-- The `scripts/bin/*.sh` wrappers use `uv run`, which fails here — call the venv python directly.
-- Init the UNet submodule once: `git submodule update --init`.
+- The `scripts/bin/*.sh` wrappers call `uv run` — prefer `.venv/bin/python` directly.
+- All four weights live in `weights/`; the pre-godfire-retrain set is backed up in `weights/backup/`.
+- Long training: run nohup'd and poll the log; do NOT write a waiter that greps its own target
+  string (`pgrep -f train_yolo_classifier` matches the waiter itself and loops forever).
