@@ -1,0 +1,17 @@
+{
+  "created_utc": "2026-06-08T14:14:55+00:00",
+  "table_name": "initial",
+  "metrics": {
+    "top_1_accuracy_validated": 0.9830729166666666,
+    "top_1_accuracy": 0.982421875,
+    "top_2_accuracy": 0.9915364583333334,
+    "top_3_accuracy": 0.994140625,
+    "validation_fixes": 8,
+    "validation_improvements": 1,
+    "extraction_failures": 0,
+    "avg_time_per_prediction": 0.07850407560666402,
+    "board_extractor_weights": "best_yolo_extractor.pt",
+    "classifier_weights": "best_yolo_classifier.pt",
+    "test_table_name": "initial"
+  }
+}

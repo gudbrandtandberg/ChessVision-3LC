@@ -84,26 +84,47 @@ class ChessVision:
     def _initialize_board_extractor(self) -> None:
         """Initialize the board extraction model."""
         logger.info("Initializing board extraction model...")
+
+        # If no model specified, try YOLO first (preferred), falling back to UNet
         if self._board_extractor_model_id is None:
-            self._board_extractor = UNet(n_channels=3, n_classes=1)
-            self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)  # type: ignore
-            self._board_extractor = utils.load_model_checkpoint(
-                self._board_extractor,  # type: ignore
-                self._board_extractor_weights,
-                self.device,
-            )
+            try:
+                self._board_extractor = utils.load_yolo_segmentation_model(
+                    self._board_extractor_weights or constants.BEST_YOLO_EXTRACTOR,
+                )
+                self._board_extractor_model_id = "yolo"
+                self._board_extractor_weights = self._board_extractor_weights or constants.BEST_YOLO_EXTRACTOR
+                logger.info(f"Loaded YOLO board extractor from {self._board_extractor_weights}")
+            except ImportError:
+                logger.info("YOLO not available, falling back to UNet")
+                self._initialize_unet_extractor()
+        # If YOLO explicitly requested, try loading it or fail
         elif self._board_extractor_model_id == "yolo":
             self._board_extractor = utils.load_yolo_segmentation_model(
                 self._board_extractor_weights or constants.BEST_YOLO_EXTRACTOR,
             )
+            self._board_extractor_weights = self._board_extractor_weights or constants.BEST_YOLO_EXTRACTOR
+            logger.info(f"Loaded YOLO board extractor from {self._board_extractor_weights}")
+        # Otherwise use the UNet
         else:
-            assert False, f"Invalid board extractor model ID: {self._board_extractor_model_id}"
+            self._initialize_unet_extractor()
 
         if hasattr(self._board_extractor, "metadata"):
             logger.info(f"Board extractor metadata: {self._board_extractor.metadata}")
 
         self._board_extractor.eval()
         self._board_extractor.to(self.device)
+
+    def _initialize_unet_extractor(self) -> None:
+        """Initialize a UNet board extractor from checkpoint weights."""
+        self._board_extractor = UNet(n_channels=3, n_classes=1)
+        self._board_extractor = self._board_extractor.to(memory_format=torch.channels_last)  # type: ignore
+        self._board_extractor = utils.load_model_checkpoint(
+            self._board_extractor,  # type: ignore
+            self._board_extractor_weights or constants.BEST_EXTRACTOR_WEIGHTS,
+            self.device,
+        )
+        self._board_extractor_model_id = "unet"
+        self._board_extractor_weights = self._board_extractor_weights or constants.BEST_EXTRACTOR_WEIGHTS
 
     def _initialize_classifier(self) -> None:
         """Initialize the piece classifier model."""
@@ -213,11 +234,14 @@ class ChessVision:
 
         # Prepare image for model
         image_batch = torch.Tensor(np.array([comp_image])) / 255
-        image_batch = image_batch.permute(0, 3, 1, 2).to(self.device)
+        # .contiguous() is required: the YOLO backend does an internal .view() that
+        # fails on the non-contiguous tensor produced by permute().
+        image_batch = image_batch.permute(0, 3, 1, 2).contiguous().to(self.device)
 
-        # Get model predictions
+        # Get model predictions. .float() normalizes dtype across backends (e.g. the YOLO
+        # backend may return half precision on MPS) so downstream float32 assertions hold.
         with torch.no_grad():
-            logits = self.board_extractor(image_batch)[0].squeeze().cpu().numpy()
+            logits = self.board_extractor(image_batch)[0].squeeze().float().cpu().numpy()
 
         # Process predictions
         return self.process_board_extraction_logits(logits, image, threshold)

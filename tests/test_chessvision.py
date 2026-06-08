@@ -28,7 +28,8 @@ def test_chessvision_initialization() -> None:
     cv = ChessVision()
     assert cv._board_extractor is None  # Should be None due to lazy loading
     assert cv._classifier is None  # Should be None due to lazy loading
-    assert cv._board_extractor_weights == constants.BEST_EXTRACTOR_WEIGHTS
+    # Weights resolve lazily at load time; unset until a model is initialized.
+    assert cv._board_extractor_weights is None
     assert cv._classifier_weights is None
 
     # Test custom weights initialization

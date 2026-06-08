@@ -142,8 +142,10 @@ def compute_model_topk_accuracy(
 
 def get_test_generator(test_table: tlc.Table) -> Generator[tuple[np.ndarray, str, str], None, None]:
     """Returns (img, filename, true_fen)"""
-    for img in test_table:
-        img_url: str = img._tlc_url
+    # Iterate the raw table rows (not the sample view): in tlc 3.x a row is a dict whose
+    # "image" value is the absolute file URL we need to read the original and locate its FEN.
+    for row in test_table.table_rows:
+        img_url: str = row["image"]
         img_array = cv2.imread(img_url)
         filename = img_url.split("/")[-1]
         fen_path = img_url.lower().replace("raw", "ground_truth").replace("jpg", "txt")
