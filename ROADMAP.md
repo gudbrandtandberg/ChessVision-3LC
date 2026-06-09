@@ -69,6 +69,9 @@ When the two diverge, Claude trades off case-by-case and flags it here.
 - **Decouple metrics tests from tlc** (move pure functions out of `evaluate.py`) + add
   `integration` pytest markers so `-m "not integration"` is the fast offline lane.
 - **Audit remaining 3.x-untested scripts**: `process_new_raw/*`, `merge_new_raw/*` (need S3).
+- **Periodically verify the public-wheel path**: run the suite against a clean `uv sync` (no
+  source overlay) + a real free key. That's the default external-user experience (Tier 1 in
+  CONTRIBUTING) and is easy to let rot while we live on the source overlay.
 
 ## Later
 
