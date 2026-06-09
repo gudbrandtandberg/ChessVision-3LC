@@ -142,12 +142,13 @@ def compute_model_topk_accuracy(
 
 def get_test_generator(test_table: tlc.Table) -> Generator[tuple[np.ndarray, str, str], None, None]:
     """Returns (img, filename, true_fen)"""
-    for img in test_table:
-        img_url: str = img._tlc_url
+    for row in test_table.table_rows:
+        img_url: str = row["image"]
         img_array = cv2.imread(img_url)
-        filename = img_url.split("/")[-1]
-        fen_path = img_url.lower().replace("raw", "ground_truth").replace("jpg", "txt")
-        with Path(fen_path).open("r") as f:
+        img_path = Path(img_url)
+        filename = img_path.name
+        fen_path = img_path.parent.parent / "ground_truth" / (img_path.stem + ".txt")
+        with fen_path.open("r") as f:
             true_fen = f.read().strip()
         yield img_array, filename, true_fen
 
@@ -209,9 +210,9 @@ def evaluate_model(
     run_name: str = "",
     run_description: str = "",
     board_extractor_weights: str | None = None,
-    board_extractor_model_id: str = "",
+    board_extractor_model_id: str | None = None,
     classifier_weights: str | None = None,
-    classifier_model_id: str = "",
+    classifier_model_id: str | None = None,
     include_metrics_table: bool = False,
 ) -> tlc.Run:
     """Run evaluation on test images using the ChessVision model."""

@@ -205,3 +205,11 @@ In addition, there is a practically endless supply of new data collected through
 ### Run evaluation suite
 
 ![ChessVision Pipeline](examples/screenshots/test_results.png)
+
+## License
+
+This project is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0) — see [LICENSE](LICENSE). This includes the trained model weights in `weights/`, which are fine-tuned from [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) (itself AGPL-3.0); see [NOTICE](NOTICE) for attribution.
+
+If you run this as a network service, AGPL-3.0 requires you to make your complete corresponding source available to your users. For commercial/proprietary use without that obligation, you would need an Ultralytics Enterprise License.
+
+Please credit this project if you build on it.

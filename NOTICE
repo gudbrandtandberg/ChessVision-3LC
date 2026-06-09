@@ -1,0 +1,16 @@
+ChessVision-3LC
+Copyright (C) 2024-2026 Gudbrand Tandberg
+
+This program is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
+See the LICENSE file for the full text.
+
+This project builds on Ultralytics YOLO (https://github.com/ultralytics/ultralytics),
+licensed under AGPL-3.0. The trained model weights in weights/
+(best_yolo_classifier.pt, best_yolo_extractor.pt) are fine-tuned from Ultralytics YOLO
+checkpoints and are therefore also distributed under AGPL-3.0.
+
+Note: deploying this software (including over a network) obligates you to provide the
+complete corresponding source under AGPL-3.0 to your users. For proprietary or SaaS use
+without that obligation, obtain an Ultralytics Enterprise License.

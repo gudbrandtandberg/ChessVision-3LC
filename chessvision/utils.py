@@ -187,20 +187,40 @@ def display_comparison(
     plt.show()
 
 
+def _import_yolo() -> type:
+    """Import the YOLO class, preferring the 3LC-integrated fork.
+
+    `tlc_ultralytics` (3lc-ultralytics) is the intended package — this is a 3LC demo project,
+    so we never want to silently lose the 3LC integration. Its import can fail for reasons
+    other than a missing package (most commonly a missing/invalid 3LC API key, which raises at
+    `import tlc`). In that case we only fall back to bare `ultralytics` when explicitly opted
+    in via `CHESSVISION_ALLOW_BARE_ULTRALYTICS=1` (e.g. offline CI / unit tests); otherwise we
+    raise so a misconfigured dev environment is loud, not silent.
+    """
+    try:
+        from tlc_ultralytics import YOLO
+    except Exception as tlc_err:  # noqa: BLE001 - tlc import can fail on API-key validation, not only ImportError
+        if os.getenv("CHESSVISION_ALLOW_BARE_ULTRALYTICS") != "1":
+            msg = (
+                "Could not import 3lc-ultralytics (tlc_ultralytics) — usually a missing or "
+                "invalid 3LC API key. Set up the dev environment with a valid key "
+                "(uv sync; pip install -e ../tlc-monorepo -e ../3lc-ultralytics), or set "
+                "CHESSVISION_ALLOW_BARE_ULTRALYTICS=1 to fall back to bare ultralytics "
+                "(no 3LC integration)."
+            )
+            raise RuntimeError(msg) from tlc_err
+        logger.warning(f"3lc-ultralytics unavailable ({tlc_err}); using bare ultralytics (no 3LC integration)")
+        from ultralytics import YOLO
+    return YOLO
+
+
 def load_yolo_segmentation_model(model_weights: str) -> torch.nn.Module:
     """Load a YOLO model for board segmentation.
 
     Args:
         model_weights: Path to YOLO model weights
     """
-    try:
-        from tlc_ultralytics import YOLO
-    except ImportError:
-        try:
-            from ultralytics import YOLO
-        except ImportError as err:
-            msg = "YOLO model requires the 3lc-ultralytics or ultralytics package."
-            raise ImportError(msg) from err
+    YOLO = _import_yolo()  # noqa: N806 - YOLO is a class
 
     class SEGYOLOModelWrapper:
         def __init__(self, model: YOLO):
@@ -239,20 +259,10 @@ def load_yolo_classification_model(model_weights: str) -> torch.nn.Module:
         Wrapped YOLO model that implements the classifier interface
 
     Raises:
-        ImportError: If ultralytics is not installed
+        RuntimeError: If 3lc-ultralytics cannot be imported and the bare-ultralytics
+            fallback is not explicitly enabled (see `_import_yolo`).
     """
-    try:
-        from tlc_ultralytics import YOLO
-    except ImportError:
-        try:
-            from ultralytics import YOLO
-
-            logger.warning("Using ultralytics (no 3lc integration) package")
-        except ImportError:
-            logger.warning(
-                "YOLO model requires the 3lc-ultralytics or ultralytics package.",
-            )
-            raise
+    YOLO = _import_yolo()  # noqa: N806 - YOLO is a class
 
     class YOLOModelWrapper:
         """Wrapper to make YOLO model behave like a classifier."""

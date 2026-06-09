@@ -14,6 +14,7 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 import tqdm
 from PIL.Image import Image
+from tlc.integration.torch import create_sampler
 from torch.utils.data import DataLoader
 
 from chessvision import constants, utils
@@ -52,12 +53,12 @@ val_transforms = transforms.Compose(
 )
 
 
-def train_map(sample: tuple[Image, int]) -> tuple[torch.Tensor, int]:
-    return train_transforms(sample[0]), sample[1]
+def train_map(sample: dict[str, Image | int]) -> tuple[torch.Tensor, int]:
+    return train_transforms(sample["image"]), sample["label"]
 
 
-def val_map(sample: tuple[Image, int]) -> tuple[torch.Tensor, int]:
-    return val_transforms(sample[0]), sample[1]
+def val_map(sample: dict[str, Image | int]) -> tuple[torch.Tensor, int]:
+    return val_transforms(sample["image"]), sample["label"]
 
 
 def train(
@@ -179,18 +180,19 @@ def train_model(
     train_table = tables["train"]
     val_table = tables["val"]
 
-    train_table.map(train_map).map_collect_metrics(val_map)
-    val_table.map(val_map)
+    train_view = train_table.with_transform(train_map)
+    train_metrics_view = train_table.with_transform(val_map)
+    val_view = val_table.with_transform(val_map)
 
     logger.info(f"Using training table {train_table.url}")
     logger.info(f"Using validation table {val_table.url}")
 
     # Create data loaders
     train_data_loader = DataLoader(
-        train_table,
+        train_view,
         batch_size=batch_size,
         shuffle=not use_sample_weights,
-        sampler=train_table.create_sampler() if use_sample_weights else None,
+        sampler=create_sampler(train_table) if use_sample_weights else None,
         num_workers=4,
         pin_memory=True,
         persistent_workers=True,
@@ -198,7 +200,7 @@ def train_model(
         generator=g,
     )
     val_data_loader = DataLoader(
-        val_table,
+        val_view,
         shuffle=False,
         batch_size=batch_size,
         pin_memory=True,
@@ -272,7 +274,7 @@ def train_model(
 
         if epoch in collection_epochs:
             tlc.collect_metrics(
-                train_table,
+                val_view,
                 metrics_collectors=metrics_collectors,
                 predictor=predictor,
                 split="val",
@@ -282,7 +284,7 @@ def train_model(
             )
 
             tlc.collect_metrics(
-                train_table,
+                train_metrics_view,
                 metrics_collectors=metrics_collectors,
                 predictor=predictor,
                 split="train",
