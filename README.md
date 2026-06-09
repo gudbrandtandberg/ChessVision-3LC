@@ -143,8 +143,8 @@ Main scripts for training and evaluating the models are located in the `scripts/
 # Train the YOLO classifier (recommended, requires "yolo" extra)
 ./scripts/bin/train_yolo_classifier.sh
 
-# Or train the default piece classifier
-./scripts/bin/train_piece_classifier.sh
+# Or the fallback (non-YOLO) classifier
+./scripts/bin/train_classifier.sh
 
 # Now that we have trained models, we can run the evaluation suite
 ./scripts/bin/evaluate.sh
