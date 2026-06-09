@@ -12,9 +12,9 @@ in `chessvision/core.py`.
 ## Models / weights
 - **YOLO is the default and preferred path** for both board extraction and classification.
   UNet remains as a fallback only if `ultralytics` is unavailable.
-- Weights live in `weights/`, are **not** committed (Ultralytics AGPL licensing caution),
-  and are produced by the training scripts — they are our "current best models".
-  Present: `best_yolo_classifier.pt`, `best_yolo_extractor.pt`.
+- The two best models **are committed** in `weights/` (`best_yolo_classifier.pt`,
+  `best_yolo_extractor.pt`) — the repo is AGPL-3.0, so the weights ship in-repo (see the
+  ROADMAP decision log). They're produced by the training scripts — our "current best models".
 - Don't add weight-sync/fetch scripts; regenerate via `scripts/bin/train_*.sh`.
 
 ## Environment gotchas (macOS, verified 2026-06-08)
@@ -71,7 +71,7 @@ One-time setup:
 cd ~/projects/ChessVision-3LC
 uv venv                                                  # fresh .venv in the project
 uv sync --all-extras                                     # public deps (3lc 3.0 wheel, ultralytics, ...)
-uv pip install -e ../tlc-monorepo -e ../3lc-ultralytics  # editable source overlay (tlc 3.1)
+uv pip install -e ../tlc-monorepo -e ../3lc-ultralytics  # source overlay (API-compatible with the public 3.0 wheel)
 git submodule update --init                              # UNet submodule (only for the UNet path)
 ```
 The editable source overlay matters: the frozen `3lc` wheel ignores `TLC_DISABLE_ACCOUNT_SERVICE`

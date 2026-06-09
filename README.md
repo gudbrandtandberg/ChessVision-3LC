@@ -137,7 +137,10 @@ python examples/detailed-example.py
 Main scripts for training and evaluating the models are located in the `scripts/` directory.
 
 ```bash
-# Train the board extractor
+# Train the YOLO board extractor (recommended, requires "yolo" extra)
+./scripts/bin/train_yolo_board_extractor.sh
+
+# Or the fallback (non-YOLO / UNet) board extractor
 ./scripts/bin/train_board_extractor.sh
 
 # Train the YOLO classifier (recommended, requires "yolo" extra)
