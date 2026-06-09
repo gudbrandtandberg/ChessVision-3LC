@@ -69,6 +69,9 @@ When the two diverge, Claude trades off case-by-case and flags it here.
 - **Decouple metrics tests from tlc** (move pure functions out of `evaluate.py`) + add
   `integration` pytest markers so `-m "not integration"` is the fast offline lane.
 - **Audit remaining 3.x-untested scripts**: `process_new_raw/*`, `merge_new_raw/*` (need S3).
+- **Periodically verify the public-wheel path**: run the suite against a clean `uv sync` (no
+  source overlay) + a real free key. That's the default external-user experience (Tier 1 in
+  CONTRIBUTING) and is easy to let rot while we live on the source overlay.
 
 ## Later
 
@@ -76,6 +79,10 @@ When the two diverge, Claude trades off case-by-case and flags it here.
 - Active-learning loop driven by extraction-confidence / embedding outliers.
 - Latency/packaging pass; revisit the Flask app + compute server.
 - End-to-end FEN accuracy (not just per-square) as a headline metric.
+- Board extraction via corner-keypoint regression (YOLO-pose): regress the 4 board
+  corners directly instead of segment-mask → contour → perspective transform. Early spike
+  in the closed #6 (`notebooks/convert_to_kpts.py` builds a keypoints table from existing
+  masks via `_find_quadrangle`).
 
 ## Open questions for Gudbrand
 - For the harder test set: label budget / how the 600k uploads' ground-truth FENs get created

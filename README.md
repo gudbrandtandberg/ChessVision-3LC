@@ -25,8 +25,8 @@ The [3LC](https://3lc.ai) data platform, built by the incredible team at 3LC AI,
 
 ## Features
 
-- Chessboard segmentation using a UNet model
-- Chess piece classification using a YOLO model or a timm-based model
+- Chessboard extraction with a YOLO segmentation model (UNet fallback)
+- Chess piece classification with a YOLO model (timm-based fallback)
 - API for image processing
 - Web interface for uploading and analyzing chess images
 
@@ -36,7 +36,7 @@ The [3LC](https://3lc.ai) data platform, built by the incredible team at 3LC AI,
 - `scripts/`: Scripts for training and evaluating the models
 - `app/`: Code for a development Flask web application and compute server
 - `data/`: Training and evaluation datasets
-- `weights/`: Pre-trained models (not included in the repo - train your own models or contact me for a copy)
+- `weights/`: Trained models — the two best YOLO models (`best_yolo_extractor.pt`, `best_yolo_classifier.pt`) are committed (AGPL-3.0), so inference works on a fresh clone
 - `tests/`: Unit tests for the computer vision code
 
 ## Installation
@@ -52,49 +52,42 @@ cd ChessVision-3LC
 git submodule update --init
 ```
 
-### 2 Install dependencies
+### 2. Install dependencies
 
-Choose either approach:
+Everything installs from **public packages** — no special access required. The YOLO and 3LC
+integrations (`3lc-ultralytics`, `3lc`) come from the public 3LC package index automatically.
+[`uv`](https://docs.astral.sh/uv/) is recommended:
 
-#### Option A: Using uv (Recommended - Faster)
 ```bash
-
-# Install uv on macOS and Linux.
+# Install uv (macOS/Linux); Windows: https://github.com/astral-sh/uv#installation
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Windows: follow instructions at https://github.com/astral-sh/uv?tab=readme-ov-file#installation
-
-# Install dependencies
-uv sync --all-extras
+uv sync                 # core deps (YOLO + 3LC)
+uv sync --all-extras    # also pulls the viz (plotly) and boto (S3) extras
 ```
 
-#### Option B: Using venv and pip
+<details><summary>Alternative: venv + pip</summary>
 
 ```bash
-# Create a new virtual environment
-python -m venv .venv
-
-# Activate the environment
-source .venv/bin/activate
-
-# Install in editable mode with all dependency groups
-pip install -e ".[dev,viz,yolo]"
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[viz,boto]"
 ```
+</details>
 
-### 3. Set up 3LC
+### 3. Get a 3LC API key (free)
 
-1. Get your API key:
-   - Go to [account.3lc.ai](https://accounts.3lc.ai)
-   - Copy your API key
+3LC is integrated throughout the pipeline. A **free single-user account** unlocks everything —
+training, evaluation, and the 3LC Dashboard:
 
-2. Login to 3LC:
-```bash
-# Login with your API key
-3lc login <your-api-key>
+1. Sign up and copy your key at [account.3lc.ai](https://accounts.3lc.ai).
+2. Authenticate, then verify:
+   ```bash
+   3lc login <your-api-key>   # or: export TLC_API_KEY=<your-api-key>
+   3lc --version
+   ```
 
-# Verify installation
-3lc --version
-```
+> Contributors with access to the 3LC source can run **fully offline** (account service
+> disabled, no key). See [CONTRIBUTING.md](CONTRIBUTING.md) for that and other setups.
 
 ## Verify Installation
 
@@ -108,13 +101,13 @@ python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 # Check if mps is available
 python -c "import torch; print('MPS available:', torch.backends.mps.is_available())"
 
-# Run tests (requires trained models)
+# Run tests (the committed weights are used automatically)
 pytest tests/
 ```
 
 ## Examples
 
-**Note:** You must have trained models in the weights directory to run the examples. See the [Training](#training) section for more details.
+**Note:** The committed YOLO weights in `weights/` are used by default, so the examples run on a fresh clone. To train your own, see the [Training](#training) section.
 
 ### Quick Start
 
@@ -137,14 +130,17 @@ python examples/detailed-example.py
 Main scripts for training and evaluating the models are located in the `scripts/` directory.
 
 ```bash
-# Train the board extractor
+# Train the YOLO board extractor (recommended)
+./scripts/bin/train_yolo_board_extractor.sh
+
+# Or the fallback (non-YOLO / UNet) board extractor
 ./scripts/bin/train_board_extractor.sh
 
-# Train the YOLO classifier (recommended, requires "yolo" extra)
+# Train the YOLO classifier (recommended)
 ./scripts/bin/train_yolo_classifier.sh
 
-# Or train the default piece classifier
-./scripts/bin/train_piece_classifier.sh
+# Or the fallback (non-YOLO) classifier
+./scripts/bin/train_classifier.sh
 
 # Now that we have trained models, we can run the evaluation suite
 ./scripts/bin/evaluate.sh
@@ -167,7 +163,7 @@ python scripts/merge_new_raw/merge_new_test.py
 
 The chessvision solution consists of several steps:
 
-1. Board detection using a UNet model to segment the chessboard from the background
+1. Board extraction using a YOLO segmentation model to segment the chessboard from the background (UNet fallback)
 2. Contour detection and filtering to identify the chessboard boundaries
 3. Perspective transform to extract the chessboard
 4. Individual square extraction
@@ -205,6 +201,12 @@ In addition, there is a practically endless supply of new data collected through
 ### Run evaluation suite
 
 ![ChessVision Pipeline](examples/screenshots/test_results.png)
+
+## Contributing
+
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup tiers
+(public wheels + free key, fully-offline source overlay, and the no-3LC inference-only
+escape hatch) and the macOS / Linux-CUDA platform notes.
 
 ## License
 
