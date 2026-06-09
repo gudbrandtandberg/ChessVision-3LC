@@ -5,6 +5,7 @@ weights/*
 .venv/
 .venv-dev/
 .env
+.envrc
 Notes.md
 output/
 .DS_Store
