@@ -3,7 +3,7 @@
 > Living sync doc between Gudbrand and Claude. Claude owns the code; Gudbrand sets
 > direction. Keep this short and current — prune done items, promote ideas as they ripen.
 
-Last updated: 2026-06-08 (end of day 1 of the takeover)
+Last updated: 2026-06-10
 
 ## The two goals
 
@@ -28,8 +28,12 @@ When the two diverge, Claude trades off case-by-case and flags it here.
 - **License**: whole repo is **AGPL-3.0** (built on Ultralytics YOLO; weights inherit AGPL).
 - **Dev**: runs fully offline-ish via editable `tlc`/`3lc-ultralytics` source + a throwaway key
   (`TLC_DISABLE_ACCOUNT_SERVICE=1`). See CLAUDE.md (Mac + godfire setup).
-- **Branch/PR**: everything is on `claude/foundation-yolo-default-baseline` → PR #18 (open,
-  not yet merged). GPU node `gubbis@godfire` is set up with a standalone `.venv`.
+- **Branch/PR**: foundation PR #18 + docs PR #19 are **merged** to `main`. GPU node
+  `gubbis@godfire` is set up with a standalone `.venv`.
+- **Provenance ledger** (`data/provenance/ledger.json`): single source of truth for which
+  upload UUID belongs to which split (`train_val`/`test`/`candidate`/`rejected`). Sampling
+  always excludes everything in it, so train/test can't leak. Seeded from on-disk splits
+  (631 extraction `train_val` + 35 existing `test`).
 
 ## Done (day 1)
 
@@ -49,16 +53,23 @@ When the two diverge, Claude trades off case-by-case and flags it here.
 
 ## Active — start here next session
 
-1. **Bigger + harder test set from the 600k uploads.** Two reasons, both important:
-   - *Statistical power*: the current test set is **24 boards** — far too small to trust a
-     1pp accuracy delta (today's old→new comparison is directionally good but not robust).
-   - *Difficulty/coverage*: curate by the DATA_COLLECTION.md categories (lighting, angle,
-     game state, environment), sampling diversely via 3LC embeddings (not by model failure).
-   This unblocks every future "did X help?" question and is a strong 3LC selection demo.
-2. **Merge PR #18** once reviewed (you're the author, so GitHub won't let you self-assign as
-   reviewer — just review + merge, or add a 3LC colleague).
+1. **Bigger + harder test set from the 695k uploads** — *in progress*. Tooling built
+   (2026-06-10), human review pending. Pipeline (all pure-Python, no `tlc`, in
+   `scripts/curation/`):
+   - `sample_test_candidates.py` → stratified-by-month seeded sample of 260 candidates
+     into `data/test/harder-v1/` (oversampled to absorb rejects; targets ~200 keepers).
+   - `predict_test_candidates.py` → model-drafts both orientations' FENs (259/260 boards
+     extracted; 1 extraction failure).
+   - `review_tool.py` → local Flask app, raw photo vs. rendered predicted FEN, keystroke
+     accept/flip/edit/reject; writes confirmed FENs to `ground_truth/`, stamps the ledger.
+   - **NEXT human step (Gudbrand)**: run the review tool and confirm/correct ~200 FENs.
+   - *Deferred refinement*: visual-category diversity via embeddings (the 3LC selection
+     demo). Current sampling is temporal-only — good spread across collection periods, but
+     doesn't explicitly cover lighting/angle/game-state categories. Revisit after v1 lands.
+2. **Re-baseline on `harder-v1`** once labeled: rerun `scripts/eval/compare.py`, expect
+   accuracy to drop from the (inflated, 24-board) 0.986 — that's the point.
 3. **Board-extraction failure analysis** on the new test set; treat the contour/quadrangle
-   step as a suspect, not just the model.
+   step as a suspect, not just the model. (1 hard failure already in `harder-v1`; inspect it.)
 
 ## Next
 
@@ -85,8 +96,11 @@ When the two diverge, Claude trades off case-by-case and flags it here.
   masks via `_find_quadrangle`).
 
 ## Open questions for Gudbrand
-- For the harder test set: label budget / how the 600k uploads' ground-truth FENs get created
-  (model-assisted in the 3LC dashboard, then human-corrected?).
+- *(resolved 2026-06-10)* Harder-set labeling: model-assisted drafts + human correction via a
+  throwaway local tool (bypassing 3LC), ~200 boards. See decisions log.
+- Should `harder-v1`'s raw photos (~22 MB, 260 imgs) be committed to the repo like
+  `test/initial`, or kept out (LFS / external)? Defaulted to in-repo for now (matches
+  precedent, sizes comparable). Flag if you'd rather not grow the repo.
 
 ## Decisions log
 - 2026-06-08: Claude takes code ownership; ROADMAP.md is the sync point. (Gudbrand)
@@ -101,3 +115,22 @@ When the two diverge, Claude trades off case-by-case and flags it here.
 - 2026-06-08: Retrained both models on godfire, re-baselined on CUDA; fixed the YOLO-seg split
   to the canonical seeded split. Note: old→new (+1pp) is on a 24-board set — not statistically
   robust; a bigger test set is the prerequisite for confident model comparisons. (Claude)
+- 2026-06-11: **Test data as 3LC tables + Insights plugin.** Test batches are materialized as
+  3LC tables (`scripts/curation/testset_tables.py`): one table per batch under
+  `chessvision-testing/test/<slug>` (cols `image`,`fen`,`source`,`month`), joined into a rebuilt
+  `test-all` tip; files+ledger stay the source of truth, tables are derived/reproducible. The
+  add-batch workflow is wrapped as an **external 3lc-insights compute-service plugin** living in
+  this repo at `plugins/chessvision_testset/` (loaded via `~/.3lc-compute/settings.json`
+  `plugin_dirs`). Plugin is a thin orchestrator: shells heavy stages into this repo's `.venv`,
+  serves review in-process. Decision: keep the plugin in this repo, not in 3lc-insights. Eval now
+  reads ground truth from the table's `fen` column (sidecar `.txt` fallback for legacy tables),
+  and `evaluate_model` returns the metrics dict with 3LC **Run creation opt-in** (`--create-run` /
+  `--include-metrics-table`); `compare.py` runs dashboard-free. (Gudbrand/Claude)
+- 2026-06-10: **Harder test set sourcing.** Raw uploads live on the LaCie disk at
+  `/media/gubbis/LACIE/chessvision-raw-uploads` (~695k UUID-named JPGs, foldered `YYYY/MM/DD`).
+  Sourcing discipline enforced by a persistent **provenance ledger** keyed on UUID — sampling
+  excludes anything already assigned to a split, so no train/test leakage. Target ~200 boards.
+  Labeling = **model-assisted draft + human correction via a throwaway local Flask tool,
+  bypassing 3LC** (render predicted FEN as SVG beside the raw photo, keystroke confirm). Chose
+  this over the 3LC-dashboard route for speed/simplicity; the embedding-based *selection* demo
+  is deferred, not abandoned. (Gudbrand/Claude)

@@ -1,0 +1,160 @@
+<!-- ChessVision Test Set plugin UI fragment (embedded in the 3LC Hub sidebar/panel). -->
+<style>
+ .cvts{font-family:system-ui,sans-serif;color:#eee;display:flex;flex-direction:column;gap:12px;height:100%}
+ .cvts .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+ .cvts input,.cvts select{font-family:inherit;padding:5px 7px;background:#000;color:#eee;border:1px solid #444;border-radius:4px}
+ .cvts input.fen{font-family:monospace;color:#0f0;flex:1;min-width:200px}
+ .cvts button{padding:5px 12px;border:1px solid #555;border-radius:4px;background:#2a2a2a;color:#eee;cursor:pointer}
+ .cvts button:hover{background:#383838}
+ .cvts .stage{background:#1b5e20;border-color:#2e7d32}
+ .cvts .muted{font-size:12px;color:#9aa}
+ .cvts #log{font-family:monospace;font-size:11px;color:#9aa;white-space:pre-wrap;max-height:80px;overflow:auto}
+ .cvts .review{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+ .cvts .col{display:flex;flex-direction:column;gap:4px;align-items:center}
+ .cvts .review img,.cvts .review svg{max-height:42vh;max-width:30vw;background:#2b2b2b;border-radius:6px}
+ .cvts #flip svg{height:72px;width:72px}
+ .cvts kbd{background:#333;border:1px solid #555;border-radius:4px;padding:0 5px;font-family:monospace}
+ .cvts .badge{font-size:11px;font-weight:600;padding:2px 9px;border-radius:9px;text-transform:uppercase}
+ .cvts .badge.pending{background:#444;color:#bbb}.cvts .badge.accepted{background:#1b5e20;color:#a5d6a7}.cvts .badge.rejected{background:#5d1f1f;color:#ef9a9a}
+ .cvts details.help{background:#222;border:1px solid #333;border-radius:6px;padding:6px 10px;font-size:12px}
+ .cvts details.help summary{cursor:pointer;color:#9aa;font-weight:600}
+ .cvts details.help ol{margin:8px 0 4px;padding-left:20px;line-height:1.55}
+ .cvts details.help li{margin:3px 0}
+ .cvts .grp{font-size:11px;color:#777;text-transform:uppercase;letter-spacing:.05em}
+</style>
+<div class="cvts">
+ <details class="help">
+  <summary>How this works — sample → predict → review → commit</summary>
+  <ol>
+   <li><b>Sample</b> — draw a fresh, diverse set of candidate boards from the upload pool into a
+       new batch. Excludes anything already used for training or another test split, so there's
+       no data leakage.</li>
+   <li><b>Predict</b> — run the ChessVision model to <i>draft</i> a FEN for each candidate (in
+       both orientations). These are guesses to speed you up, not ground truth.</li>
+   <li><b>Review</b> — for each board, compare the raw photo to the predicted position and
+       confirm it: <kbd>A</kbd> accept · <kbd>F</kbd> flipped · <kbd>E</kbd> edit ·
+       <kbd>X</kbd> reject (not a usable board) · <kbd>←</kbd><kbd>→</kbd> browse. Decide by
+       <i>labelability</i>, not difficulty — keep easy boards too, and don't cherry-pick the
+       model's mistakes, or the test set becomes biased.</li>
+   <li><b>Commit → 3LC</b> — write the confirmed batch as a 3LC table and rebuild the joined
+       <code>test-all</code> tip that evaluation runs against.</li>
+  </ol>
+  <p class="muted">New batch → type a name, <b>Sample</b>, then <b>Predict</b>. Then pick it
+   under <i>Review / commit</i> and go. Existing batch → just select and Review (or Commit).</p>
+ </details>
+
+ <div class="row">
+  <span class="grp">New&nbsp;batch</span>
+  <input id="newBatch" placeholder="harder-v2" size="10" title="Name for a new batch to create (also the 3LC table name).">
+  <label class="muted" title="How many candidates to sample. Oversample a bit — rejects and extraction failures get dropped during review.">N&nbsp;<input id="nCand" value="260" size="4"></label>
+  <label class="muted" title="Random seed. The same seed reproduces the same sample.">seed&nbsp;<input id="seed" value="42" size="4"></label>
+  <button id="sampleBtn" class="stage" title="Step 1: draw N diverse candidates from the upload pool into the named batch (no train/test leakage).">1 · Sample</button>
+  <button id="predictBtn" class="stage" title="Step 2: run the model to draft a FEN per candidate (uses the New-batch name, else the selected batch).">2 · Predict</button>
+ </div>
+ <div class="row">
+  <span class="grp">Review&nbsp;/&nbsp;commit</span>
+  <select id="batchSel" title="Pick an existing batch. Counts show labeled / candidates."></select>
+  <button id="loadBtn" title="Step 3: open the review pane for the selected batch.">3 · Review</button>
+  <button id="commitBtn" class="stage" title="Step 4: write the confirmed batch as a 3LC table and rebuild the test-all tip eval uses.">4 · Commit → 3LC</button>
+ </div>
+ <div id="log" class="muted"></div>
+ <div class="row"><span id="badge" class="badge pending" style="display:none"></span><span id="counter" class="muted"></span></div>
+ <div id="review" class="review"></div>
+ <div class="row" id="controls" style="display:none">
+  <span class="muted"><kbd>A</kbd> accept <kbd>F</kbd> flipped <kbd>E</kbd> edit <kbd>X</kbd> reject <kbd>←</kbd><kbd>→</kbd> browse</span>
+  <div class="col"><span class="muted">flipped (F)</span><div id="flip"></div></div>
+  <input id="edit" class="fen" spellcheck="false" placeholder="edit FEN — board updates live; Enter to accept">
+ </div>
+</div>
+<script>
+(function(){
+ // The frontend injects window.PLUGIN_API (see 3lc-insights plugin-loader.js): use its
+ // authFetch + compute-service base URL, NOT a bare relative fetch (which hits the frontend
+ // origin unauthenticated). Falls back to plain fetch if opened standalone.
+ const P=window.PLUGIN_API;
+ const COMPUTE=P?P.getConfig('compute_service_url'):'';
+ const BASE=COMPUTE+'/api/plugins/chessvision-testset';
+ const af=(path,opts)=>(P?P.authFetch(BASE+path,opts):fetch(BASE+path,opts));
+ const jget=async p=>(await af(p)).json();
+ const jpost=async (p,b)=>(await af(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})).json();
+ const tget=async p=>(await af(p)).text();
+ const $=id=>document.getElementById(id);
+ let batch=null, cur=null, idx=0;
+
+ function log(m){ $('log').textContent=m||''; }
+ async function refreshBatches(){
+  try{
+   const d=await jget('/batches');
+   const sel=$('batchSel'); sel.innerHTML='';
+   (d.batches||[]).forEach(b=>{
+    const o=document.createElement('option'); o.value=b.batch;
+    o.textContent=`${b.batch}  (${b.labeled}/${b.candidates} labeled${b.predicted?'':' · not predicted'})`;
+    sel.appendChild(o);
+   });
+   if(!(d.batches||[]).length) log('No batches found under data/test/ (check the plugin repo path).');
+  }catch(e){ log('Could not load batches: '+e); }
+ }
+
+ async function pollJob(jobId,label){
+  log(label+' …');
+  for(;;){
+   await new Promise(r=>setTimeout(r,1500));
+   const j=await jget('/jobs/'+jobId);
+   if(j.status==='running'){ log(label+' … '+j.elapsed+'s'); continue; }
+   const r=j.result||{};
+   log(label+(r.success?' ✓':' ✗')+'\n'+(r.log||''));
+   await refreshBatches();
+   return r;
+  }
+ }
+ async function stage(ep,body,label){
+  const d=await jpost(ep,body);
+  if(d.error){ log('error: '+d.error); return; }
+  return pollJob(d.job_id,label);
+ }
+
+ $('sampleBtn').onclick=()=>stage('/sample',{batch:$('newBatch').value.trim(),n:+$('nCand').value,seed:+$('seed').value},'Sampling');
+ $('predictBtn').onclick=()=>{const b=$('newBatch').value.trim()||$('batchSel').value; stage('/predict',{batch:b},'Predicting');};
+ $('commitBtn').onclick=()=>{const b=$('batchSel').value; stage('/commit',{batch:b},'Committing to 3LC');};
+ $('loadBtn').onclick=()=>{ batch=$('batchSel').value; show(); };
+
+ async function show(i){
+  if(!batch) return;
+  const q=(i===undefined?'':'&i='+i);
+  const d=await jget('/item?batch='+encodeURIComponent(batch)+q);
+  if(d.error){ log(d.error); return; }
+  cur=d; idx=d.index;
+  const badge=$('badge'); badge.style.display=''; badge.textContent=d.status; badge.className='badge '+d.status;
+  $('counter').textContent=(d.index+1)+' / '+d.total+'  ·  '+d.reviewed+' reviewed, '+d.remaining+' left';
+  $('controls').style.display='flex';
+  $('review').innerHTML=`
+   <div class="col"><span class="muted">raw photo</span><img src="${BASE}/raw?batch=${encodeURIComponent(batch)}&uuid=${d.uuid}"></div>
+   <div class="col"><span class="muted">accept (A) · live edit</span><div id="boardA">${d.svg_display}</div></div>`;
+  $('flip').innerHTML=d.svg_flipped||'';
+  const e=$('edit'); e.value=d.fen||'';
+  e.oninput=async()=>{ $('boardA').innerHTML=await tget('/svg?fen='+encodeURIComponent(e.value)); };
+  e.onkeydown=ev=>{ if(ev.key==='Enter'){ev.preventDefault();decide('accepted',e.value);} else if(ev.key==='Escape'){e.blur();} ev.stopPropagation(); };
+  e.blur();
+ }
+ async function decide(status,fen){
+  if(!cur) return;
+  await jpost('/decide',{batch:batch,uuid:cur.uuid,status:status,fen:fen});
+  show(idx+1);
+ }
+ document.addEventListener('keydown',ev=>{
+  if(!cur) return;
+  // Don't hijack typing in any text field (new-batch name, N, seed, the FEN editor, etc.).
+  const ae=document.activeElement;
+  if(ae && (ae.tagName==='INPUT'||ae.tagName==='SELECT'||ae.tagName==='TEXTAREA'||ae.isContentEditable)) return;
+  const k=ev.key.toLowerCase();
+  if(k==='a') decide('accepted',$('edit').value);
+  else if(k==='f') decide('accepted',cur.fen_flipped);
+  else if(k==='x') decide('rejected',null);
+  else if(k==='e'){ ev.preventDefault(); $('edit').focus(); }
+  else if(ev.key==='ArrowLeft'){ ev.preventDefault(); show(idx-1); }
+  else if(ev.key==='ArrowRight'){ ev.preventDefault(); show(idx+1); }
+ });
+
+ refreshBatches();
+})();
+</script>

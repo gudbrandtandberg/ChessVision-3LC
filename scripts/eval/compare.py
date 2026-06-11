@@ -48,17 +48,17 @@ CONTEXT_METRICS = [
 
 
 def run_eval(table_name: str, project_name: str, image_folder: Path) -> dict:
-    """Run the aggregate evaluation and return the test_results dict."""
-    run = evaluate_model(
-        image_folder=image_folder,
-        table_name=table_name,
-        project_name=project_name,
-        run_name="compare",
-        board_extractor_model_id="yolo",
-        classifier_model_id="yolo",
-        include_metrics_table=False,
+    """Run the aggregate evaluation and return the metrics dict (no 3LC Run created)."""
+    return dict(
+        evaluate_model(
+            image_folder=image_folder,
+            table_name=table_name,
+            project_name=project_name,
+            board_extractor_model_id="yolo",
+            classifier_model_id="yolo",
+            include_metrics_table=False,  # create_run defaults False → measurement-only, no dashboard
+        ),
     )
-    return dict(run.constants["parameters"]["test_results"])
 
 
 def load_baseline() -> dict | None:

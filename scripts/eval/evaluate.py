@@ -140,17 +140,27 @@ def compute_model_topk_accuracy(
     return TopKAccuracyResult(k=k, accuracies=accuracies)
 
 
+def _read_sidecar_fen(img_path: Path) -> str:
+    """Ground truth from the ``ground_truth/<stem>.txt`` sidecar (legacy image-only tables)."""
+    fen_path = img_path.parent.parent / "ground_truth" / (img_path.stem + ".txt")
+    return fen_path.read_text().strip()
+
+
 def get_test_generator(test_table: tlc.Table) -> Generator[tuple[np.ndarray, str, str], None, None]:
-    """Returns (img, filename, true_fen)"""
+    """Yield ``(img, filename, true_fen)`` for each test row.
+
+    Ground truth comes from the table's ``fen`` column when present — the canonical path now
+    that batches are committed as 3LC tables (see ``scripts/curation/testset_tables.py``). Falls
+    back to the ``ground_truth/<stem>.txt`` sidecar for older image-only tables (e.g. one created
+    on the fly from an image folder).
+    """
+    has_fen = "fen" in set(test_table.columns)
     for row in test_table.table_rows:
         img_url: str = row["image"]
         img_array = cv2.imread(img_url)
         img_path = Path(img_url)
-        filename = img_path.name
-        fen_path = img_path.parent.parent / "ground_truth" / (img_path.stem + ".txt")
-        with fen_path.open("r") as f:
-            true_fen = f.read().strip()
-        yield img_array, filename, true_fen
+        true_fen = row["fen"].strip() if has_fen and row.get("fen") else _read_sidecar_fen(img_path)
+        yield img_array, img_path.name, true_fen
 
 
 def save_svg(chessboard: chess.Board, path: Path) -> None:
@@ -214,15 +224,21 @@ def evaluate_model(
     classifier_weights: str | None = None,
     classifier_model_id: str | None = None,
     include_metrics_table: bool = False,
-) -> tlc.Run:
-    """Run evaluation on test images using the ChessVision model."""
-    # Initialize run and model
+    create_run: bool = False,
+) -> dict:
+    """Run evaluation on the test table and return the aggregate metrics dict.
+
+    A 3LC ``Run`` is created only when ``create_run`` is set (or implied by
+    ``include_metrics_table`` / a passed-in ``run``) — that's the opt-in "delve into details"
+    path. The fast measurement path (e.g. ``compare.py``) leaves the dashboard untouched.
+    """
     test_table = resolve_table(
         table_name=table_name,
         image_folder=image_folder,
         project_name=project_name,
     )
-    if not run:
+    create_run = create_run or include_metrics_table or run is not None
+    if create_run and run is None:
         run = tlc.init(project_name=project_name, run_name=run_name, description=run_description)
 
     cv = ChessVision(
@@ -360,15 +376,15 @@ def evaluate_model(
         "test_table_name": table_name,
     }
 
-    # Finalize run
-    run.set_parameters({"test_results": aggregate_data, "threshold": threshold})
+    # Persist to the run only when one was created (opt-in). finalize() auto-updates in 3.x.
+    if run is not None:
+        run.set_parameters({"test_results": aggregate_data, "threshold": threshold})
+        if metrics_writer:
+            metrics_writer.finalize()
+        run.set_status_completed()
+        logger.info(f"Created run: {run.url}")
 
-    # Only add metrics table if requested. finalize() auto-updates the run in 3.x.
-    if metrics_writer:
-        metrics_writer.finalize()
-
-    run.set_status_completed()
-    return run
+    return aggregate_data
 
 
 def save_predicted_board(run: tlc.Run, filename: str, fen: str, suffix: str = "") -> Path:
@@ -452,8 +468,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--classifier-weights", type=str, help="Path to classifier weights")
     parser.add_argument("--classifier-model-id", type=str, default="yolo", help="Classifier model ID")
     parser.add_argument("--board-extractor-model-id", type=str, default="yolo", help="Board extractor model ID")
-    parser.add_argument("--table-name", type=str, default="initial", help="Table name")
-    parser.add_argument("--include-metrics-table", action="store_true", help="Include metrics table")
+    parser.add_argument("--table-name", type=str, default="initial", help="Test table name (e.g. 'test-all' tip)")
+    parser.add_argument(
+        "--create-run",
+        action="store_true",
+        help="Create a 3LC Run for dashboard analysis (opt-in; implied by --include-metrics-table).",
+    )
+    parser.add_argument(
+        "--include-metrics-table",
+        action="store_true",
+        help="Also write per-square metrics into the run (implies --create-run).",
+    )
     return parser.parse_args()
 
 
@@ -476,7 +501,7 @@ if __name__ == "__main__":
 
     start = time.time()
 
-    run = evaluate_model(
+    results = evaluate_model(
         image_folder=Path(args.image_folder),
         run=None,
         project_name=args.project_name,
@@ -489,26 +514,12 @@ if __name__ == "__main__":
         classifier_model_id=args.classifier_model_id,
         table_name=args.table_name,
         include_metrics_table=args.include_metrics_table,
+        create_run=args.create_run,
     )
     stop = time.time()
     logger.info(f"Evaluation completed in {stop - start:.1f}s")
-    if "test_results" in run.constants["parameters"]:
-        logger.info("Test accuracy: {:.3f}".format(run.constants["parameters"]["test_results"]["top_1_accuracy"]))
-        logger.info(
-            "Validated accuracy: {:.3f}".format(
-                run.constants["parameters"]["test_results"]["top_1_accuracy_validated"],
-            ),
-        )
-        logger.info(
-            "Validation improvements: {}".format(
-                run.constants["parameters"]["test_results"]["validation_improvements"],
-            ),
-        )
-        logger.info(
-            "Validation fixes: {}".format(
-                run.constants["parameters"]["test_results"]["validation_fixes"],
-            ),
-        )
-        logger.info(
-            "Extraction failures: {}".format(run.constants["parameters"]["test_results"]["extraction_failures"]),
-        )
+    logger.info("Test accuracy:           {:.3f}".format(results["top_1_accuracy"]))
+    logger.info("Validated accuracy:      {:.3f}".format(results["top_1_accuracy_validated"]))
+    logger.info("Validation improvements: {}".format(results["validation_improvements"]))
+    logger.info("Validation fixes:        {}".format(results["validation_fixes"]))
+    logger.info("Extraction failures:     {}".format(results["extraction_failures"]))
