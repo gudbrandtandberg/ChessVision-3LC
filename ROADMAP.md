@@ -126,6 +126,25 @@ When the two diverge, Claude trades off case-by-case and flags it here.
   reads ground truth from the table's `fen` column (sidecar `.txt` fallback for legacy tables),
   and `evaluate_model` returns the metrics dict with 3LC **Run creation opt-in** (`--create-run` /
   `--include-metrics-table`); `compare.py` runs dashboard-free. (Gudbrand/Claude)
+- 2026-06-17: **Review workflow is duplicated (plugin vs Flask tool) — accepted debt, TODO.**
+  The Hub plugin's in-process review endpoints (`plugins/chessvision_testset/__init__.py`) re-implement
+  `scripts/curation/review_tool.py`: svg-render, item-state/resume/precedence, decide, raw/board/svg,
+  and the frontend (`ui.html` vs the Flask `PAGE`). The copies have already drifted (`has_board`
+  derivation; "committed GT counts as done" only in the plugin). Worse, the plugin's `_record_ledger`
+  **bypasses `provenance.record`** and writes `{split, batch}` only (no `source`/`ts`) — so a UUID's
+  ledger schema depends on which UI stamped it, eroding the ledger-as-SSoT invariant. Agreed fix when
+  revisited: extract a framework-agnostic `review_core.py` (layout + render + item-state + decide-via-
+  `provenance`) that both the Flask tool and the plugin adapt; make `provenance.py` importable in the
+  compute venv (drop the `chessvision.constants` dep, just resolve `DATA_ROOT`). Decided to keep both
+  paths and defer the consolidation. Plugin host/venv isolation itself (the primary goal) is sound and
+  not affected. (Gudbrand/Claude)
+- 2026-06-11: **Test-tip lineage = append-only immutable revisions ("cumsum"), TODO.** Current
+  `testset_tables.rebuild_tip` overwrites `test-all` from scratch each commit, which (made worse
+  by a manual `rm` during wrap-up) loses history and risks runs silently drifting off the URL
+  they measured. Agreed fix: batch tables write-once; tip built by appending the new batch to
+  `test-all.latest()` (the in-repo `merge_new_test.py` pattern), never destroying old revisions;
+  eval pins the concrete revision per run, new evals use `.latest()`. Frozen-on-commit is the
+  intended test-set discipline. Not yet implemented. (Gudbrand/Claude)
 - 2026-06-10: **Harder test set sourcing.** Raw uploads live on the LaCie disk at
   `/media/gubbis/LACIE/chessvision-raw-uploads` (~695k UUID-named JPGs, foldered `YYYY/MM/DD`).
   Sourcing discipline enforced by a persistent **provenance ledger** keyed on UUID — sampling
