@@ -1,0 +1,47 @@
+# Dependency manifest for the chessvision-testset plugin's isolated venv.
+#
+# This file exists ONLY for provisioning: `uv sync` in this directory builds the
+# plugin's own venv (`.venv/`) from these deps. The plugin's *compute-service*
+# metadata (id, ui, runtime) lives in plugin.toml next to this file —
+# read_manifest() checks plugin.toml first, so there is no [tool.tlc-compute]
+# table here.
+#
+# The plugin is a thin orchestrator: the heavy torch/ultralytics/tlc stages are
+# shelled into the ChessVision repo's own `.venv`, so this venv stays light — it
+# only needs the compute-service base (worker harness + plugin_sdk + litestar +
+# uvicorn, brought by `3lc-compute`) plus `python-chess` for the in-process FEN
+# rendering / validation. Keeping `chess` here is the whole point: it stays out of
+# the main compute-service venv.
+#
+# `package = false` → uv provisions the deps into a venv without building this
+# directory as a package. The worker imports the entrypoint module
+# (`chessvision_testset_plugin`) directly: it launches with this dir as cwd and
+# adds cwd to sys.path, so the flat module resolves.
+
+[project]
+name = "tlc-compute-plugin-chessvision-testset"
+version = "0.1.0"
+# Provisioning builds this venv against the host interpreter by default (uv sync
+# --python <host>), so no pin is needed here. To run on a different Python, set
+# [runtime] python = "3.x" in plugin.toml.
+requires-python = ">=3.10"
+dependencies = [
+    "3lc-compute",  # light base: worker harness + plugin_sdk + litestar + uvicorn + 3lc
+    "chess",        # python-chess — in-process FEN→SVG rendering + FEN validation
+]
+
+[tool.uv]
+package = false
+
+# 3lc private releases index — 3lc versions not yet on public PyPI.
+[[tool.uv.index]]
+name = "3lc-releases"
+url = "https://pypi.3lc.ai/public/repositories/releases-public"
+explicit = true
+
+[tool.uv.sources]
+3lc = { index = "3lc-releases" }
+# Dev: resolve the light `3lc-compute` base from the local compute-service
+# checkout (both repos live under the same projects root). In production the
+# plugin venv installs `3lc-compute` from the published index instead (drop this).
+3lc-compute = { path = "../../../3lc-insights/compute-service", editable = true }

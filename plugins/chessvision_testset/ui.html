@@ -95,27 +95,26 @@
   }catch(e){ log('Could not load batches: '+e); }
  }
 
- async function pollJob(jobId,label){
+ // Heavy stages run as host jobs over the generic job channel (window.PluginJobs,
+ // injected ahead of this script — see plugin_sdk/shared/job_tracker.py). The flat
+ // generic schema can't carry the subprocess log tail, so the backend rides it on a
+ // structured `stage_result` event we subscribe to alongside the lifecycle.
+ function runStage(stage,body,label){
+  if(!body.batch){ log('batch name required'); return; }
   log(label+' …');
-  for(;;){
-   await new Promise(r=>setTimeout(r,1500));
-   const j=await jget('/jobs/'+jobId);
-   if(j.status==='running'){ log(label+' … '+j.elapsed+'s'); continue; }
-   const r=j.result||{};
+  const off=PluginJobs.on('/chessvision-testset','stage_result',r=>{
    log(label+(r.success?' ✓':' ✗')+'\n'+(r.log||''));
-   await refreshBatches();
-   return r;
-  }
- }
- async function stage(ep,body,label){
-  const d=await jpost(ep,body);
-  if(d.error){ log('error: '+d.error); return; }
-  return pollJob(d.job_id,label);
+  });
+  PluginJobs.run('chessvision-testset',Object.assign({stage:stage},body),{
+   onUpdate:j=>{ const p=j.progress||{}; if(p.label && (p.percent||0)<100) log(label+' … '+p.label); },
+   onDone:()=>{ off(); refreshBatches(); },
+   onError:j=>{ off(); log(label+' ✗ '+((j&&j.subtitle)||'failed')); refreshBatches(); }
+  });
  }
 
- $('sampleBtn').onclick=()=>stage('/sample',{batch:$('newBatch').value.trim(),n:+$('nCand').value,seed:+$('seed').value},'Sampling');
- $('predictBtn').onclick=()=>{const b=$('newBatch').value.trim()||$('batchSel').value; stage('/predict',{batch:b},'Predicting');};
- $('commitBtn').onclick=()=>{const b=$('batchSel').value; stage('/commit',{batch:b},'Committing to 3LC');};
+ $('sampleBtn').onclick=()=>runStage('sample',{batch:$('newBatch').value.trim(),n:+$('nCand').value,seed:+$('seed').value},'Sampling');
+ $('predictBtn').onclick=()=>{const b=$('newBatch').value.trim()||$('batchSel').value; runStage('predict',{batch:b},'Predicting');};
+ $('commitBtn').onclick=()=>{const b=$('batchSel').value; runStage('commit',{batch:b},'Committing to 3LC');};
  $('loadBtn').onclick=()=>{ batch=$('batchSel').value; show(); };
 
  async function show(i){

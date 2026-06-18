@@ -1,0 +1,33 @@
+# 3LC Compute plugin manifest — the single source of truth for this plugin's
+# metadata. The host loads the plugin via runtime.entrypoint; there is no
+# register() call at import and no metadata on the plugin class.
+id = "chessvision-testset"
+name = "ChessVision Test Set"
+description = "Sample upload candidates, draft FENs with the model, review them, and commit a test batch to 3LC tables."
+version = "0.1.0"
+min_service_version = "0.1.0"
+icon = "♟"
+icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M5 11h6M6 5l2-2 2 2-1 4H7z"/></svg>'
+
+[ui]
+display_mode = "sidebar"
+section = "ChessVision"
+compatible_with = ["table"]
+input_types = []          # standalone — sources its own raw data
+output_types = ["table"]
+priority = 60
+quick_action = true
+quick_action_label = "Add Test Batch"
+quick_action_description = "Curate & commit a ChessVision test-data batch"
+
+[runtime]
+isolation = "venv"
+# Flat entry module (not a package): the worker launches with the plugin dir as
+# cwd and adds it to sys.path, so `chessvision_testset_plugin` resolves directly.
+entrypoint = "chessvision_testset_plugin:ChessVisionTestSetPlugin"
+# Image/SVG endpoints are loaded via <img src>/inline and carry no auth header.
+auth_exempt_paths = [
+    "^/api/plugins/chessvision-testset/raw$",
+    "^/api/plugins/chessvision-testset/board$",
+    "^/api/plugins/chessvision-testset/svg$",
+]
